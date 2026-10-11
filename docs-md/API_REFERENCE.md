@@ -750,7 +750,7 @@ interface AccessibilityLabels {
     row?: string;                  // "Row {n}: {content}"
   };
   math?: {
-    equation?: string;             // "Math: {latex}"
+    equation?: string;             // "Math: {speech}"
   };
   codeBlock?: {                    // enableCodeBlockWrapToggle
     wrap?: string;                 // "Wrap lines"
@@ -764,7 +764,7 @@ interface AccessibilityLabels {
 }
 ```
 
-Placeholders (`{n}`, `{content}`, `{latex}`) are substituted on the native side at speak time and must be preserved in translations.
+Placeholders (`{n}`, `{content}`, `{speech}`, `{latex}`) are substituted on the native side at speak time and must be preserved in translations; `{speech}` reads the formula in English on iOS (Android substitutes the source).
 
 **Example:**
 
@@ -774,7 +774,7 @@ Placeholders (`{n}`, `{content}`, `{latex}`) are substituted on the native side 
   accessibilityLabels={{
     list: { bulletPoint: 'Punkt', orderedItem: 'Element {n}' },
     blockquote: { quote: 'Zitat' },
-    math: { equation: 'Formel: {latex}' },
+    math: { equation: 'Formel: {speech}' },
   }}
 />
 ```
