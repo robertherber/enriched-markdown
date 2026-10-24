@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   interpolate,
   useAnimatedProps,
@@ -23,6 +23,7 @@ import { usePlayer } from '../player';
 import { BRASS, FONTS, NIGHT, ORANGE, RED } from '../theme';
 import { useEntrance } from './motion';
 import { SourceNote } from './SourceNote';
+import { useArtwork } from './useArtwork';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedLine = Animated.createAnimatedComponent(Line);
@@ -90,11 +91,14 @@ export function TapeMachine(_props: { block: MarkdownVideoBlock }) {
 
   return (
     <Animated.View style={[styles.card, cardStyle]}>
-      <View style={styles.tape}>
-        <Text style={styles.tapeTitle}>A Love Supreme</Text>
-        <Text style={styles.tapeNote}>
-          RVG · ENGLEWOOD CLIFFS · DEC 9, 1964
-        </Text>
+      <View style={styles.labels}>
+        <TapeBox />
+        <View style={styles.tape}>
+          <Text style={styles.tapeTitle}>A Love Supreme</Text>
+          <Text style={styles.tapeNote}>
+            RVG · ENGLEWOOD CLIFFS · DEC 9, 1964
+          </Text>
+        </View>
       </View>
       <View style={styles.deck}>
         <TapePath wound={wound} />
@@ -151,6 +155,21 @@ export function TapeMachine(_props: { block: MarkdownVideoBlock }) {
         prefix="McCOY TYNER · JIMMY GARRISON · ELVIN JONES"
       />
     </Animated.View>
+  );
+}
+
+// The record's cover, propped against the deck while the real record plays.
+function TapeBox() {
+  const uri = useArtwork('loveSupreme');
+  if (!uri) return null;
+  return (
+    <View style={styles.box}>
+      <Image
+        source={{ uri }}
+        style={StyleSheet.absoluteFill}
+        accessibilityIgnoresInvertColors
+      />
+    </View>
   );
 }
 
@@ -457,13 +476,26 @@ const styles = StyleSheet.create({
     padding: 14,
     marginVertical: 4,
   },
+  labels: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 10,
+  },
+  box: {
+    width: 54,
+    height: 54,
+    borderRadius: 2,
+    overflow: 'hidden',
+    backgroundColor: '#111',
+    transform: [{ rotate: '-4deg' }],
+  },
   tape: {
-    alignSelf: 'center',
     backgroundColor: '#E6DCB6',
     paddingHorizontal: 18,
     paddingVertical: 4,
     transform: [{ rotate: '-1.5deg' }],
-    marginBottom: 10,
     alignItems: 'center',
   },
   tapeTitle: {

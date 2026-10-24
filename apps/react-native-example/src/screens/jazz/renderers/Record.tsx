@@ -1,5 +1,5 @@
 import { memo, useEffect, useState, type ComponentType } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -42,6 +42,7 @@ import {
 } from '../theme';
 import { SETTLE, SWING, formatTime, useEntrance } from './motion';
 import { SourceNote } from './SourceNote';
+import { useArtwork } from './useArtwork';
 
 interface Album {
   track: TrackId;
@@ -182,7 +183,7 @@ export function Record({ block }: { block: MarkdownLinkBlock }) {
               <Sheen />
             </Animated.View>
             <View style={[styles.sleeve, { width: S, height: S }]}>
-              <album.Sleeve />
+              <Cover album={album} />
             </View>
             <Tonearm
               left={width - 18}
@@ -500,6 +501,42 @@ function Tonearm({
       >
         <View style={styles.pivotCore} />
       </View>
+    </>
+  );
+}
+
+// The real cover while the real record plays; the drawn sleeve stands under
+// it for the sketches and until the art arrives.
+function Cover({ album }: { album: Album }) {
+  const uri = useArtwork(album.track);
+  const shown = useSharedValue(0);
+  useEffect(() => {
+    if (!uri) shown.value = withTiming(0, { duration: 300 });
+  }, [uri, shown]);
+  const coverStyle = useAnimatedStyle(() => ({ opacity: shown.value }));
+
+  return (
+    <>
+      <album.Sleeve />
+      {uri && (
+        <Animated.View style={[StyleSheet.absoluteFill, coverStyle]}>
+          <Image
+            source={{ uri }}
+            style={StyleSheet.absoluteFill}
+            accessibilityIgnoresInvertColors
+            onLoad={() => {
+              shown.value = withTiming(1, { duration: 450, easing: SETTLE });
+            }}
+          />
+          <Svg
+            style={StyleSheet.absoluteFill}
+            viewBox="0 0 100 100"
+            pointerEvents="none"
+          >
+            <Wear />
+          </Svg>
+        </Animated.View>
+      )}
     </>
   );
 }
