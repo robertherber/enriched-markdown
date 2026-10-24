@@ -21,6 +21,7 @@ import Svg, {
 } from 'react-native-svg';
 import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
 import { useDemoStream } from '../shared/useDemoStream';
+import type { SoundSource } from './audio/engine';
 import type { TrackId } from './audio/scores';
 import { LINER_NOTES_MARKDOWN, PROMPT } from './linerNotesMarkdown';
 import { PlayerProvider, usePlayer } from './player';
@@ -69,15 +70,18 @@ function LinerNotes() {
             {stream.writing ? 'writing…' : 'a life in records'}
           </Text>
         </View>
+        <SourceSwitch />
         <Pressable
           onPress={() => {
             player.stop();
             stream.replay();
           }}
           hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Replay the answer"
           testID="liner-notes-replay"
         >
-          <Text style={styles.replay}>↻ REPLAY</Text>
+          <Text style={styles.replay}>↻</Text>
         </Pressable>
       </View>
       <Animated.ScrollView
@@ -138,7 +142,11 @@ function NowPlaying({ track }: { track: TrackId }) {
     >
       <MiniDisc color={color} spinning size={34} />
       <View style={styles.nowTitles}>
-        <Text style={styles.nowKicker}>NOW PLAYING</Text>
+        <Text style={styles.nowKicker}>
+          {player.source === 'recording'
+            ? 'NOW PLAYING · PREVIEW'
+            : 'NOW PLAYING · SKETCH'}
+        </Text>
         <Text style={styles.nowTitle} numberOfLines={1}>
           {`${title} · John Coltrane`}
         </Text>
@@ -154,6 +162,38 @@ function NowPlaying({ track }: { track: TrackId }) {
         <View style={styles.nowStopGlyph} />
       </Pressable>
     </Animated.View>
+  );
+}
+
+const SOURCES: Array<{ source: SoundSource; label: string }> = [
+  { source: 'recording', label: 'RECORDS' },
+  { source: 'synth', label: 'SYNTH' },
+];
+
+// The real records' previews, or the combo synthesised on the device.
+function SourceSwitch() {
+  const player = usePlayer();
+  return (
+    <View style={styles.switch} accessibilityRole="radiogroup">
+      {SOURCES.map(({ source, label }) => {
+        const selected = player.source === source;
+        return (
+          <Pressable
+            key={source}
+            onPress={() => player.setSource(source)}
+            hitSlop={6}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            testID={`liner-notes-source-${source}`}
+            style={[styles.switchOption, selected && styles.switchSelected]}
+          >
+            <Text style={[styles.switchText, selected && styles.switchTextOn]}>
+              {label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
@@ -308,9 +348,33 @@ const styles = StyleSheet.create({
   },
   replay: {
     fontFamily: FONTS.monoMedium,
-    fontSize: 12,
-    letterSpacing: 1,
+    fontSize: 20,
     color: BRASS,
+  },
+  switch: {
+    flexDirection: 'row',
+    padding: 2,
+    borderRadius: 14,
+    backgroundColor: SMOKE,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: SMOKE_EDGE,
+  },
+  switchOption: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  switchSelected: {
+    backgroundColor: BRASS,
+  },
+  switchText: {
+    fontFamily: FONTS.monoMedium,
+    fontSize: 10,
+    letterSpacing: 1,
+    color: CREAM_SOFT,
+  },
+  switchTextOn: {
+    color: NIGHT,
   },
   content: {
     paddingHorizontal: 22,

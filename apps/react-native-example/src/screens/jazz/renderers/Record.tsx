@@ -1,12 +1,15 @@
 import { memo, useEffect, useState, type ComponentType } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
+  Easing,
+  cancelAnimation,
   interpolate,
   useAnimatedReaction,
   useAnimatedStyle,
   useFrameCallback,
   useSharedValue,
   withDelay,
+  withRepeat,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
@@ -38,6 +41,7 @@ import {
   SMOKE_EDGE,
 } from '../theme';
 import { SETTLE, SWING, formatTime, useEntrance } from './motion';
+import { SourceNote } from './SourceNote';
 
 interface Album {
   track: TrackId;
@@ -199,6 +203,7 @@ export function Record({ block }: { block: MarkdownLinkBlock }) {
           </View>
           <PlayButton
             playing={playing}
+            loading={player.loading === album.track}
             onPress={() => player.toggle(album.track)}
             label={block.label}
           />
@@ -209,6 +214,7 @@ export function Record({ block }: { block: MarkdownLinkBlock }) {
           progress={player.progress}
           elapsed={player.elapsed}
         />
+        <SourceNote track={album.track} />
       </View>
     </Animated.View>
   );
@@ -216,18 +222,35 @@ export function Record({ block }: { block: MarkdownLinkBlock }) {
 
 export function PlayButton({
   playing,
+  loading,
   onPress,
   label,
   size = 50,
 }: {
   playing: boolean;
+  loading: boolean;
   onPress: () => void;
   label: string;
   size?: number;
 }) {
   const pressed = useSharedValue(0);
+  const turn = useSharedValue(0);
+  useEffect(() => {
+    if (!loading) {
+      cancelAnimation(turn);
+      turn.value = 0;
+      return;
+    }
+    turn.value = withRepeat(
+      withTiming(360, { duration: 900, easing: Easing.linear }),
+      -1
+    );
+  }, [loading, turn]);
   const style = useAnimatedStyle(() => ({
     transform: [{ scale: 1 - pressed.value * 0.08 }],
+  }));
+  const ringStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${turn.value}deg` }],
   }));
   return (
     <Pressable
@@ -240,8 +263,23 @@ export function PlayButton({
       }}
       hitSlop={8}
       accessibilityRole="button"
-      accessibilityLabel={playing ? `Stop ${label}` : `Play ${label}`}
+      accessibilityLabel={
+        playing || loading ? `Stop ${label}` : `Play ${label}`
+      }
     >
+      {loading && (
+        <Animated.View
+          style={[
+            styles.cueing,
+            {
+              width: size + 10,
+              height: size + 10,
+              borderRadius: (size + 10) / 2,
+            },
+            ringStyle,
+          ]}
+        />
+      )}
       <Animated.View
         style={[
           styles.play,
@@ -290,9 +328,6 @@ function Progress({
         </View>
         <Text style={styles.rpm}>33⅓ RPM</Text>
       </View>
-      <Text style={styles.disclaimer}>
-        SYNTHESISED SKETCH OVER THE CHANGES · NOT THE ORIGINAL RECORDING
-      </Text>
     </View>
   );
 }
@@ -835,11 +870,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     color: CREAM_SOFT,
   },
-  disclaimer: {
-    fontFamily: FONTS.mono,
-    fontSize: 8.5,
-    letterSpacing: 0.6,
-    color: '#6E6352',
-    marginTop: 8,
+  cueing: {
+    position: 'absolute',
+    top: -5,
+    left: -5,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    borderTopColor: BRASS,
+    borderRightColor: BRASS,
   },
 });

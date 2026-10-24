@@ -24,6 +24,7 @@ import type { MarkdownVideoBlock } from 'react-native-enriched-markdown';
 import { usePlayer } from '../player';
 import { BRASS, FONTS, NIGHT, ORANGE, RED } from '../theme';
 import { useEntrance } from './motion';
+import { SourceNote } from './SourceNote';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const AnimatedLine = Animated.createAnimatedComponent(Line);
@@ -52,6 +53,7 @@ function packRadii(wound: number) {
 export function TapeMachine(_props: { block: MarkdownVideoBlock }) {
   const player = usePlayer();
   const playing = player.track === 'loveSupreme';
+  const cueing = player.loading === 'loveSupreme';
   const enter = useEntrance(800);
   const on = useSharedValue(0);
   const wound = useSharedValue(0.14);
@@ -121,18 +123,25 @@ export function TapeMachine(_props: { block: MarkdownVideoBlock }) {
       <View style={styles.controls}>
         <Counter value={counter} />
         <View style={styles.keys}>
-          <Key label="◀◀" onPress={() => {}} />
           <Key
-            label="▶"
-            down={playing}
+            label="◀◀"
             onPress={() => {
-              if (!playing) player.toggle('loveSupreme');
+              if (!playing) return;
+              player.stop();
+              player.toggle('loveSupreme');
+            }}
+          />
+          <Key
+            label={cueing ? '…' : '▶'}
+            down={playing || cueing}
+            onPress={() => {
+              if (!playing && !cueing) player.toggle('loveSupreme');
             }}
           />
           <Key
             label="■"
             onPress={() => {
-              if (playing) player.stop();
+              if (playing || cueing) player.stop();
             }}
           />
           <View style={[styles.recLamp, playing && styles.recLampOn]} />
@@ -147,10 +156,10 @@ export function TapeMachine(_props: { block: MarkdownVideoBlock }) {
           </View>
         ))}
       </View>
-      <Text style={styles.disclaimer}>
-        McCOY TYNER · JIMMY GARRISON · ELVIN JONES · SYNTHESISED SKETCH, NOT THE
-        RECORDING
-      </Text>
+      <SourceNote
+        track="loveSupreme"
+        prefix="McCOY TYNER · JIMMY GARRISON · ELVIN JONES"
+      />
     </Animated.View>
   );
 }
@@ -584,13 +593,5 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bodyItalic,
     fontSize: 17,
     color: '#E6DCC6',
-  },
-  disclaimer: {
-    fontFamily: FONTS.mono,
-    fontSize: 8.5,
-    lineHeight: 13,
-    letterSpacing: 0.6,
-    color: '#6E6352',
-    marginTop: 12,
   },
 });

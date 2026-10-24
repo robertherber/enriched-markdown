@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from 'react';
+import { memo, useEffect, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   interpolate,
@@ -114,6 +114,13 @@ export function ChangesWheel({ block }: { block: MarkdownImageBlock }) {
       shownQuality.value = QUALITIES.indexOf(c.quality);
     }
   );
+
+  // Back to the three tonics once the record stops.
+  useEffect(() => {
+    if (following) return;
+    lastChord.value = -1;
+    shownPc.value = -1;
+  }, [following, lastChord, shownPc]);
 
   const cadence = (tonic: number) => {
     const dominant = DOMINANT_OF[tonic]!;
