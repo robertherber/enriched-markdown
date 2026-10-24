@@ -35,11 +35,9 @@ export interface Timeline {
   // Seconds in one pass of the record.
   length: number;
   loops: boolean;
-  beatsPerSecond: number;
-  // The beat of the form at the first sample.
-  beatAtStart: number;
-  // Beats in the form, 0 when there is none to follow.
-  formBeats: number;
+  // When each chord starts within one pass, as [seconds, chord index], for
+  // the changes wheel; null when there are no changes to follow.
+  changes: Array<[number, number]> | null;
   // Loudness per 1 / ENVELOPE_RATE seconds, measured once for a recording;
   // the synth is metered live instead.
   envelope: number[] | null;
@@ -198,7 +196,7 @@ class JazzEngine {
     track: TrackId,
     { buffer, envelope }: Decoded
   ) {
-    const { vinyl, sync } = RECORDINGS[track];
+    const { vinyl, changes } = RECORDINGS[track];
     const bus = ctx.createGain();
     bus.gain.value = 0.85;
     bus.connect(this.clean);
@@ -221,11 +219,7 @@ class JazzEngine {
         startedAt: this.wallClock(ctx, start),
         length: buffer.duration,
         loops: false,
-        beatsPerSecond: sync ? sync.bpm / 60 : 0,
-        beatAtStart: sync
-          ? sync.formBeat - (sync.firstBeat * sync.bpm) / 60
-          : 0,
-        formBeats: sync ? 64 : 0,
+        changes: changes ?? null,
         envelope,
       },
     };
@@ -269,9 +263,7 @@ class JazzEngine {
         startedAt: this.wallClock(ctx, start),
         length: score.beats * spb,
         loops: true,
-        beatsPerSecond: score.bpm / 60,
-        beatAtStart: 0,
-        formBeats: score.beats,
+        changes: score.chords.map((chord, i) => [chord.at * spb, i]),
         envelope: null,
       },
     };

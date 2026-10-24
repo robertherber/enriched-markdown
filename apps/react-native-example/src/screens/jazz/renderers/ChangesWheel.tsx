@@ -43,6 +43,17 @@ function nearestTurn(from: number, to: number) {
   return from + diff;
 }
 
+// Steps round the circle glide; a jump to another key area, like E♭ to
+// A minor, cuts straight there instead of sweeping past chords not played.
+function moveMarker(marker: SharedValue<number>, pc: number) {
+  'worklet';
+  const target = nearestTurn(marker.value, fifths(pc));
+  marker.value =
+    Math.abs(target - marker.value) > 3
+      ? target
+      : withTiming(target, { duration: 150, easing: SETTLE });
+}
+
 const RING = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
 const TONICS = [11, 7, 3];
 const DOMINANT_OF: Record<number, number> = { 11: 6, 7: 2, 3: 10 };
@@ -76,10 +87,7 @@ export function ChangesWheel({ block }: { block: MarkdownImageBlock }) {
   const shownQuality = useSharedValue(0);
 
   const moveTo = (pc: number, quality: Quality) => {
-    marker.value = withTiming(nearestTurn(marker.value, fifths(pc)), {
-      duration: 180,
-      easing: SETTLE,
-    });
+    moveMarker(marker, pc);
     pulse.value = withSequence(
       withTiming(1, { duration: 60 }),
       withTiming(0, { duration: 420 })
@@ -89,23 +97,12 @@ export function ChangesWheel({ block }: { block: MarkdownImageBlock }) {
   };
 
   useAnimatedReaction(
-    () => {
-      if (!following || player.beat.value < 0) return -1;
-      const beat = player.beat.value;
-      for (let i = 0; i < GIANT_STEPS_CHANGES.length; i++) {
-        const c = GIANT_STEPS_CHANGES[i]!;
-        if (beat >= c.at && beat < c.at + c.len) return i;
-      }
-      return -1;
-    },
+    () => (following ? player.chord.value : -1),
     (index) => {
       if (index < 0 || index === lastChord.value) return;
       lastChord.value = index;
       const c = GIANT_STEPS_CHANGES[index]!;
-      marker.value = withTiming(nearestTurn(marker.value, fifths(c.root)), {
-        duration: 150,
-        easing: SETTLE,
-      });
+      moveMarker(marker, c.root);
       pulse.value = withSequence(
         withTiming(1, { duration: 50 }),
         withTiming(0, { duration: 300 })

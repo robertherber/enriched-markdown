@@ -35,7 +35,8 @@ interface Player {
   // meters and the changes wheel; JS does no per-frame work while a record
   // plays.
   level: SharedValue<number>;
-  beat: SharedValue<number>;
+  // The chord of the form playing now, as an index into its chart, or -1.
+  chord: SharedValue<number>;
   progress: SharedValue<number>;
   elapsed: SharedValue<number>;
 }
@@ -51,7 +52,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const loadingRef = useRef<TrackId | null>(null);
   const sourceRef = useRef(source);
   const level = useSharedValue(0);
-  const beat = useSharedValue(-1);
+  const chord = useSharedValue(-1);
   const progress = useSharedValue(0);
   const elapsed = useSharedValue(0);
 
@@ -74,19 +75,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!line) {
       if (level.value > 0.001) level.value *= 0.88;
       else if (level.value !== 0) level.value = 0;
-      if (beat.value !== -1) beat.value = -1;
+      if (chord.value !== -1) chord.value = -1;
       return;
     }
     const t = Math.max(0, (Date.now() - line.startedAt) / 1000);
     const pass = line.loops ? t % line.length : Math.min(t, line.length);
     elapsed.value = t;
     progress.value = pass / line.length;
-    beat.value =
-      line.formBeats > 0
-        ? (((line.beatAtStart + pass * line.beatsPerSecond) % line.formBeats) +
-            line.formBeats) %
-          line.formBeats
-        : -1;
+    const changes = line.changes;
+    let current = -1;
+    if (changes) {
+      for (let i = 0; i < changes.length && changes[i]![0] <= pass; i++) {
+        current = changes[i]![1];
+      }
+    }
+    if (chord.value !== current) chord.value = current;
     const envelope = line.envelope;
     level.value = envelope
       ? (envelope[
@@ -161,7 +164,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       stop,
       strike,
       level,
-      beat,
+      chord,
       progress,
       elapsed,
     }),
@@ -174,7 +177,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       stop,
       strike,
       level,
-      beat,
+      chord,
       progress,
       elapsed,
     ]
