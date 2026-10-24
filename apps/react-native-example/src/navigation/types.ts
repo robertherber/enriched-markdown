@@ -7,6 +7,9 @@ export type RootStackParamList = {
   Input: { channel: string };
   Stream: undefined;
   Storybook: undefined;
+  Journal: undefined;
+  JournalStatic: undefined;
+  LinerNotes: undefined;
 };
 
 export type RootStackScreenProps<T extends keyof RootStackParamList> =

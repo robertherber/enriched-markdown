@@ -29,6 +29,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.0",
+    "react-native-audio-api": "0.13.6",
     "react-native-enriched-markdown": "*",
     "react-native-gesture-handler": "^2.33.1",
     "react-native-reanimated": "^4.7.1",

@@ -2,8 +2,36 @@
   "migIndex": 1,
   "data": [
     {
+      "path": "assets/fonts/BebasNeue-Regular.ttf",
+      "sha1": "76057d206a498d40aa4779d0d5a382ad7554dd80"
+    },
+    {
+      "path": "assets/fonts/Caveat-Bold.ttf",
+      "sha1": "eedd91eabc92d479dcf72d767ff6611be54ee561"
+    },
+    {
+      "path": "assets/fonts/Caveat-Regular.ttf",
+      "sha1": "b2b1611c60054b9e714c4c6849501d3eb3cfa60a"
+    },
+    {
       "path": "assets/fonts/CourierPrime-Regular.ttf",
       "sha1": "f0e110c73ff02b2fc7f60bd96697c42ee9730ae2"
+    },
+    {
+      "path": "assets/fonts/DMMono-Medium.ttf",
+      "sha1": "a4cb0ea1d3f8cefac2538bc03652d8bf478681f4"
+    },
+    {
+      "path": "assets/fonts/DMMono-Regular.ttf",
+      "sha1": "bd7647d9b9e1085e8b875b84081fa1522c5c865a"
+    },
+    {
+      "path": "assets/fonts/Fraunces-SemiBold.ttf",
+      "sha1": "4976282fe14681877e9d55cb87dddedb8916f086"
+    },
+    {
+      "path": "assets/fonts/Monoton-Regular.ttf",
+      "sha1": "1da14726b8db6ecbd9084185d6ce986dfe3f92f6"
     },
     {
       "path": "assets/fonts/Montserrat-Bold.ttf",
@@ -24,6 +52,18 @@
     {
       "path": "assets/fonts/Montserrat-SemiBold.ttf",
       "sha1": "79f74616d68b87d6cf89798fe72259036326567a"
+    },
+    {
+      "path": "assets/fonts/Newsreader-Italic.ttf",
+      "sha1": "e0f87e04cca45ab6f9c6c8d5e375dc776d594d3e"
+    },
+    {
+      "path": "assets/fonts/Newsreader-Regular.ttf",
+      "sha1": "abbfe5be4fbf459f8959380d0fe77e884b0682c8"
+    },
+    {
+      "path": "assets/fonts/Newsreader-SemiBold.ttf",
+      "sha1": "3853d4188e526e1931f677a29c89beb68c4bc248"
     },
     {
       "path": "assets/fonts/Poppins-Italic.ttf",

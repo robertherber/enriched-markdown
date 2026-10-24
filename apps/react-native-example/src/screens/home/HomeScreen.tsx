@@ -51,6 +51,27 @@ const SCREENS: ScreenItem[] = [
     testID: 'home-block-storybook',
     color: '#FF2D55',
   },
+  {
+    route: 'Journal',
+    label: 'Kyoto Journal',
+    subtext: 'custom block renderers',
+    testID: 'home-block-journal',
+    color: '#C8442C',
+  },
+  {
+    route: 'JournalStatic',
+    label: 'Kyoto Journal',
+    subtext: 'custom renderers, no stream',
+    testID: 'home-block-journal-static',
+    color: '#8C6A4E',
+  },
+  {
+    route: 'LinerNotes',
+    label: 'Coltrane Liner Notes',
+    subtext: 'records that play',
+    testID: 'home-block-liner-notes',
+    color: '#D9A441',
+  },
 ];
 
 export default function HomeScreen({ navigation }: Props) {
