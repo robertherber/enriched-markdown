@@ -3,13 +3,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   interpolate,
   useAnimatedProps,
-  useAnimatedReaction,
   useAnimatedStyle,
   useFrameCallback,
   useSharedValue,
   type SharedValue,
 } from 'react-native-reanimated';
-import { scheduleOnRN } from 'react-native-worklets';
 import Svg, {
   Circle,
   Defs,
@@ -62,7 +60,6 @@ export function TapeMachine(_props: { block: MarkdownVideoBlock }) {
   const speed = useSharedValue(0);
   const left = useSharedValue(0);
   const right = useSharedValue(0);
-  const [counter, setCounter] = useState(0);
 
   useEffect(() => {
     on.value = playing ? 1 : 0;
@@ -85,13 +82,6 @@ export function TapeMachine(_props: { block: MarkdownVideoBlock }) {
       wound.value + (dt * speed.value) / REEL_SECONDS
     );
   });
-
-  useAnimatedReaction(
-    () => Math.floor(wound.value * 1800),
-    (value, previous) => {
-      if (value !== previous) scheduleOnRN(setCounter, value);
-    }
-  );
 
   const cardStyle = useAnimatedStyle(() => ({
     opacity: enter.value,
@@ -121,7 +111,7 @@ export function TapeMachine(_props: { block: MarkdownVideoBlock }) {
         <Meter needle={right} channel="R" glow={on} />
       </View>
       <View style={styles.controls}>
-        <Counter value={counter} />
+        <Counter wound={wound} />
         <View style={styles.keys}>
           <Key
             label="◀◀"
@@ -380,15 +370,55 @@ const Scale = memo(function Scale() {
   );
 });
 
-function Counter({ value }: { value: number }) {
-  const digits = String(value % 10000).padStart(4, '0');
+const COUNTS_PER_REEL = 1800;
+const DIGIT_HEIGHT = 26;
+const WHEEL_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
+const PLACES = [1000, 100, 10, 1];
+
+// A mechanical counter: four digit wheels turned on the UI thread, each one
+// rolling over only while the wheel to its right passes from 9 to 0.
+const Counter = memo(function Counter({
+  wound,
+}: {
+  wound: SharedValue<number>;
+}) {
   return (
-    <View style={styles.counter}>
-      {Array.from(digits).map((digit, i) => (
-        <View key={i} style={styles.digit}>
-          <Text style={styles.digitText}>{digit}</Text>
-        </View>
+    <View
+      style={styles.counter}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      {PLACES.map((place) => (
+        <DigitWheel key={place} wound={wound} place={place} />
       ))}
+    </View>
+  );
+});
+
+function DigitWheel({
+  wound,
+  place,
+}: {
+  wound: SharedValue<number>;
+  place: number;
+}) {
+  const style = useAnimatedStyle(() => {
+    const count = wound.value * COUNTS_PER_REEL;
+    const turns = Math.floor(count / place) % 10;
+    const carry = Math.max(0, (count % place) - (place - 1));
+    return {
+      transform: [{ translateY: -(turns + carry) * DIGIT_HEIGHT }],
+    };
+  });
+  return (
+    <View style={styles.digit}>
+      <Animated.View style={style}>
+        {WHEEL_DIGITS.map((digit, i) => (
+          <Text key={i} style={styles.digitText}>
+            {digit}
+          </Text>
+        ))}
+      </Animated.View>
     </View>
   );
 }
@@ -509,13 +539,15 @@ const styles = StyleSheet.create({
   },
   digit: {
     width: 18,
-    height: 26,
+    height: DIGIT_HEIGHT,
     borderRadius: 2,
     backgroundColor: '#1C1A17',
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
   },
   digitText: {
+    height: DIGIT_HEIGHT,
+    lineHeight: DIGIT_HEIGHT,
+    textAlign: 'center',
     fontFamily: FONTS.monoMedium,
     fontSize: 15,
     color: '#ECE4D0',

@@ -17,20 +17,60 @@ import {
   type VoiceName,
 } from './synth';
 
-const LOOKAHEAD_S = 0.3;
-const TICK_MS = 60;
+const LOOKAHEAD_S = 0.6;
+const TICK_MS = 200;
+// Mastered records sit lower in RMS than the raw synth.
+const RECORDING_METER_GAIN = 4.2;
+const SYNTH_METER_GAIN = 2.6;
 
 export type SoundSource = 'recording' | 'synth';
 
+export const ENVELOPE_RATE = 30;
+
+// Everything the UI thread needs to follow a record without asking JS: the
+// turntables, meters and changes wheel derive their state from it per frame.
+export interface Timeline {
+  // `Date.now()` when the first sample is heard.
+  startedAt: number;
+  // Seconds in one pass of the record.
+  length: number;
+  loops: boolean;
+  beatsPerSecond: number;
+  // The beat of the form at the first sample.
+  beatAtStart: number;
+  // Beats in the form, 0 when there is none to follow.
+  formBeats: number;
+  // Loudness per 1 / ENVELOPE_RATE seconds, measured once for a recording;
+  // the synth is metered live instead.
+  envelope: number[] | null;
+}
+
+interface Decoded {
+  buffer: AudioBuffer;
+  envelope: number[];
+}
+
 interface Playback {
   track: TrackId;
-  start: number;
   bus: GainNode;
   surface: AudioBufferSourceNode | null;
   stopSource: (at: number) => void;
-  // Mastered records sit lower in RMS than the raw synth.
-  meterGain: number;
-  position: (elapsed: number) => { beat: number; progress: number };
+  timeline: Timeline;
+}
+
+function loudness(buffer: AudioBuffer) {
+  const data = buffer.getChannelData(0);
+  const window = Math.floor(buffer.sampleRate / ENVELOPE_RATE);
+  const envelope: number[] = [];
+  for (let from = 0; from < data.length; from += window) {
+    const to = Math.min(data.length, from + window);
+    let sum = 0;
+    for (let i = from; i < to; i++) sum += data[i]! * data[i]!;
+    envelope.push(
+      Math.min(1, Math.sqrt(sum / (to - from)) * RECORDING_METER_GAIN)
+    );
+  }
+  return envelope;
 }
 
 // Off-beat eighths land late by the score's swing; everything else is
@@ -51,7 +91,7 @@ class JazzEngine {
   private analyser!: AnalyserNode;
   private noise!: AudioBuffer;
   private surfaceNoise!: AudioBuffer;
-  private samples = new Float32Array(1024);
+  private samples = new Float32Array(512);
   private playback: Playback | null = null;
 
   private context() {
@@ -77,7 +117,7 @@ class JazzEngine {
     const shaper = ctx.createWaveShaper();
     shaper.curve = softClipCurve();
     this.analyser = ctx.createAnalyser();
-    this.analyser.fftSize = 1024;
+    this.analyser.fftSize = 512;
 
     this.input.connect(room);
     room.connect(tone);
@@ -93,7 +133,7 @@ class JazzEngine {
     return ctx;
   }
 
-  private decoded = new Map<TrackId, Promise<AudioBuffer>>();
+  private decoded = new Map<TrackId, Promise<Decoded>>();
   // Bumped on every play and stop, so a preview that finishes loading late
   // does not start over whatever was asked for since.
   private request = 0;
@@ -102,6 +142,15 @@ class JazzEngine {
 
   get track() {
     return this.playback?.track ?? null;
+  }
+
+  get timeline() {
+    return this.playback?.timeline ?? null;
+  }
+
+  // `Date.now()` at a time on the audio clock.
+  private wallClock(ctx: AudioContext, at: number) {
+    return Date.now() + (at - ctx.currentTime) * 1000;
   }
 
   async play(track: TrackId, source: SoundSource) {
@@ -113,9 +162,9 @@ class JazzEngine {
       this.playScore(ctx, track);
       return;
     }
-    const buffer = await this.recording(ctx, track);
+    const decoded = await this.recording(ctx, track);
     if (request !== this.request) return;
-    this.playRecording(ctx, track, buffer);
+    this.playRecording(ctx, track, decoded);
   }
 
   private recording(ctx: AudioContext, track: TrackId) {
@@ -124,7 +173,7 @@ class JazzEngine {
       buffer = previewUrl(track).then(async (url) => {
         const decoded = await ctx.decodeAudioData(url);
         if (!decoded) throw new Error(`Could not decode ${track}`);
-        return decoded;
+        return { buffer: decoded, envelope: loudness(decoded) };
       });
       buffer.catch(() => this.decoded.delete(track));
       this.decoded.set(track, buffer);
@@ -147,7 +196,7 @@ class JazzEngine {
   private playRecording(
     ctx: AudioContext,
     track: TrackId,
-    buffer: AudioBuffer
+    { buffer, envelope }: Decoded
   ) {
     const { vinyl, sync } = RECORDINGS[track];
     const bus = ctx.createGain();
@@ -165,20 +214,20 @@ class JazzEngine {
     };
     this.playback = {
       track,
-      start,
       bus,
       surface: vinyl ? this.surface(ctx, bus, 0.5) : null,
-      meterGain: 4.2,
       stopSource: (at) => record.stop(at),
-      position: (elapsed) => ({
-        beat: sync
-          ? (((sync.formBeat + ((elapsed - sync.firstBeat) * sync.bpm) / 60) %
-              64) +
-              64) %
-            64
-          : -1,
-        progress: Math.min(1, elapsed / buffer.duration),
-      }),
+      timeline: {
+        startedAt: this.wallClock(ctx, start),
+        length: buffer.duration,
+        loops: false,
+        beatsPerSecond: sync ? sync.bpm / 60 : 0,
+        beatAtStart: sync
+          ? sync.formBeat - (sync.firstBeat * sync.bpm) / 60
+          : 0,
+        formBeats: sync ? 64 : 0,
+        envelope,
+      },
     };
   }
 
@@ -213,14 +262,17 @@ class JazzEngine {
     const timer = setInterval(schedule, TICK_MS);
     this.playback = {
       track,
-      start,
       bus,
       surface,
-      meterGain: 2.6,
       stopSource: () => clearInterval(timer),
-      position: (elapsed) => {
-        const beat = ((elapsed * score.bpm) / 60) % score.beats;
-        return { beat, progress: beat / score.beats };
+      timeline: {
+        startedAt: this.wallClock(ctx, start),
+        length: score.beats * spb,
+        loops: true,
+        beatsPerSecond: score.bpm / 60,
+        beatAtStart: 0,
+        formBeats: score.beats,
+        envelope: null,
       },
     };
   }
@@ -237,16 +289,8 @@ class JazzEngine {
     setTimeout(() => playback.bus.disconnect(), 700);
   }
 
-  // Where the needle is: the beat for the changes wheel, how far through the
-  // side, and the time played.
-  position() {
-    const playback = this.playback;
-    if (!playback || !this.ctx) return null;
-    const elapsed = Math.max(0, this.ctx.currentTime - playback.start);
-    return { ...playback.position(elapsed), elapsed };
-  }
-
-  // A loudness in [0, 1] for meters, from the master output.
+  // A loudness in [0, 1] for meters, from the master output: the synth's
+  // live level, since it has no envelope measured ahead.
   level() {
     if (!this.ctx) return 0;
     this.analyser.getFloatTimeDomainData(this.samples);
@@ -254,8 +298,7 @@ class JazzEngine {
     for (let i = 0; i < this.samples.length; i++) {
       sum += this.samples[i]! * this.samples[i]!;
     }
-    const gain = this.playback?.meterGain ?? 2.6;
-    return Math.min(1, Math.sqrt(sum / this.samples.length) * gain);
+    return Math.min(1, Math.sqrt(sum / this.samples.length) * SYNTH_METER_GAIN);
   }
 
   // A one-off strike outside any record, like a chord played on the wheel.

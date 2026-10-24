@@ -9,11 +9,16 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  useFrameCallback,
   useSharedValue,
-  withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
-import { jazzEngine, type SoundSource } from './audio/engine';
+import {
+  ENVELOPE_RATE,
+  jazzEngine,
+  type SoundSource,
+  type Timeline,
+} from './audio/engine';
 import type { TrackId } from './audio/scores';
 import type { VoiceName } from './audio/synth';
 
@@ -26,7 +31,9 @@ interface Player {
   toggle: (track: TrackId) => void;
   stop: () => void;
   strike: (voice: VoiceName, midis: number[], len?: number) => void;
-  // Read on the UI thread by the turntables, meters and the changes wheel.
+  // Derived on the UI thread every frame and read there by the turntables,
+  // meters and the changes wheel; JS does no per-frame work while a record
+  // plays.
   level: SharedValue<number>;
   beat: SharedValue<number>;
   progress: SharedValue<number>;
@@ -48,24 +55,45 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const progress = useSharedValue(0);
   const elapsed = useSharedValue(0);
 
+  const timeline = useSharedValue<Timeline | null>(null);
+  // The synth's level, sampled from the analyser a few times a second.
+  const liveLevel = useSharedValue(0);
+
   useEffect(() => {
-    if (!track) {
-      level.value = withTiming(0, { duration: 400 });
-      beat.value = -1;
+    const line = track ? jazzEngine.timeline : null;
+    timeline.value = line;
+    if (!line || line.envelope) return;
+    const timer = setInterval(() => {
+      liveLevel.value = jazzEngine.level();
+    }, 1000 / ENVELOPE_RATE);
+    return () => clearInterval(timer);
+  }, [track, timeline, liveLevel]);
+
+  useFrameCallback(() => {
+    const line = timeline.value;
+    if (!line) {
+      if (level.value > 0.001) level.value *= 0.88;
+      else if (level.value !== 0) level.value = 0;
+      if (beat.value !== -1) beat.value = -1;
       return;
     }
-    let frame = requestAnimationFrame(function sample() {
-      const position = jazzEngine.position();
-      if (position) {
-        beat.value = position.beat;
-        progress.value = position.progress;
-        elapsed.value = position.elapsed;
-      }
-      level.value = jazzEngine.level();
-      frame = requestAnimationFrame(sample);
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [track, level, beat, progress, elapsed]);
+    const t = Math.max(0, (Date.now() - line.startedAt) / 1000);
+    const pass = line.loops ? t % line.length : Math.min(t, line.length);
+    elapsed.value = t;
+    progress.value = pass / line.length;
+    beat.value =
+      line.formBeats > 0
+        ? (((line.beatAtStart + pass * line.beatsPerSecond) % line.formBeats) +
+            line.formBeats) %
+          line.formBeats
+        : -1;
+    const envelope = line.envelope;
+    level.value = envelope
+      ? (envelope[
+          Math.min(envelope.length - 1, Math.floor(pass * ENVELOPE_RATE))
+        ] ?? 0)
+      : liveLevel.value;
+  });
 
   useEffect(() => {
     jazzEngine.onEnded = () => setTrack(null);
