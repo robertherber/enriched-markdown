@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react';
 import { artworkUrl } from '../audio/recordings';
-import type { TrackId } from '../audio/scores';
-import { usePlayer } from '../player';
+import type { TrackId } from '../audio/harmony';
 
-// The record's real cover from the store, only while the real records play;
-// null for the sketches, offline, and until the lookup lands.
+// The record's real cover from the store; null offline and until the lookup
+// lands.
 export function useArtwork(track: TrackId) {
-  const { source } = usePlayer();
   const [uri, setUri] = useState<string | null>(null);
 
   useEffect(() => {
-    if (source !== 'recording') return;
     let current = true;
     artworkUrl(track)
       .then((url) => current && setUri(url))
@@ -18,7 +15,7 @@ export function useArtwork(track: TrackId) {
     return () => {
       current = false;
     };
-  }, [track, source]);
+  }, [track]);
 
-  return source === 'recording' ? uri : null;
+  return uri;
 }

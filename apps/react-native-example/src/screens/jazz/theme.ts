@@ -25,6 +25,16 @@ export const FONTS = {
   monoMedium: 'DMMono-Medium',
 };
 
+// Brass selection. iOS tints the handles with it and fades the highlight
+// itself; Android paints the highlight as given, so it gets a translucent one.
+export const linerSelection = Platform.select({
+  ios: { selectionColor: BRASS },
+  default: {
+    selectionColor: 'rgba(217, 164, 65, 0.35)',
+    selectionHandleColor: BRASS,
+  },
+});
+
 export const linerMarkdownStyle: MarkdownStyle = {
   paragraph: {
     fontFamily: FONTS.body,

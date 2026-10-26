@@ -12,21 +12,20 @@ import Svg, {
   Circle,
   Defs,
   LinearGradient,
-  Line,
   Path,
   Rect,
   Stop,
   Text as SvgText,
 } from 'react-native-svg';
-import type { MarkdownVideoBlock } from 'react-native-enriched-markdown';
-import { usePlayer } from '../player';
+import type { MarkdownLinkBlock } from 'react-native-enriched-markdown';
+import { useAnchor } from '../anchors';
+import { usePlayer, usePlayerState } from '../player';
 import { BRASS, FONTS, NIGHT, ORANGE, RED } from '../theme';
-import { useEntrance } from './motion';
+import { CUE_DELAY_MS, useEntrance } from './motion';
 import { SourceNote } from './SourceNote';
 import { useArtwork } from './useArtwork';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-const AnimatedLine = Animated.createAnimatedComponent(Line);
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 const HUB = 15;
@@ -35,6 +34,7 @@ const FULL = 45;
 const TAPE_SPEED = 70;
 // Seconds to wind the whole reel across: short, so the packs visibly creep.
 const REEL_SECONDS = 150;
+const WIND_STEPS = 400;
 
 const PARTS = ['Acknowledgement', 'Resolution', 'Pursuance', 'Psalm'];
 
@@ -49,13 +49,15 @@ function packRadii(wound: number) {
 
 // A studio deck: the tape crosses from one reel to the other, the VU needles
 // swing with the music and a mechanical counter ticks over.
-export function TapeMachine(_props: { block: MarkdownVideoBlock }) {
+export function TapeMachine(_props: { block: MarkdownLinkBlock }) {
   const player = usePlayer();
-  const playing = player.track === 'loveSupreme';
-  const cueing = player.loading === 'loveSupreme';
+  const playing = usePlayerState((s) => s.track === 'loveSupreme');
+  const cueing = usePlayerState((s) => s.loading === 'loveSupreme');
   const enter = useEntrance(800);
+  const anchor = useAnchor('loveSupreme');
   const on = useSharedValue(0);
   const wound = useSharedValue(0.14);
+  const packWound = useSharedValue(0.14);
   const supplyAngle = useSharedValue(0);
   const takeUpAngle = useSharedValue(0);
   const speed = useSharedValue(0);
@@ -66,13 +68,31 @@ export function TapeMachine(_props: { block: MarkdownVideoBlock }) {
     on.value = playing ? 1 : 0;
   }, [on, playing]);
 
+  const { cue } = player;
+  useEffect(() => {
+    const timer = setTimeout(cue, CUE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [cue]);
+
+  // Settles a value towards its target, and stops writing once it is there so
+  // an idle deck costs nothing per frame.
+  const ease = (value: SharedValue<number>, target: number, k: number) => {
+    'worklet';
+    const next = value.value + (target - value.value) * k;
+    if (Math.abs(next - target) < 0.001) {
+      if (value.value !== target) value.value = target;
+    } else {
+      value.value = next;
+    }
+  };
+
   useFrameCallback(({ timeSincePreviousFrame }) => {
     const dt = (timeSincePreviousFrame ?? 16) / 1000;
-    speed.value += (on.value - speed.value) * (1 - Math.exp(-dt / 0.3));
+    ease(speed, on.value, 1 - Math.exp(-dt / 0.3));
     // VU ballistics: about 300 ms to settle, the right channel a touch lazier.
     const level = player.level.value * on.value;
-    left.value += (level - left.value) * (1 - Math.exp(-dt / 0.1));
-    right.value += (level * 0.92 - right.value) * (1 - Math.exp(-dt / 0.14));
+    ease(left, level, 1 - Math.exp(-dt / 0.1));
+    ease(right, level * 0.92, 1 - Math.exp(-dt / 0.14));
     if (speed.value < 0.001) return;
     const v = TAPE_SPEED * speed.value;
     const { supply, takeUp } = packRadii(wound.value);
@@ -82,6 +102,10 @@ export function TapeMachine(_props: { block: MarkdownVideoBlock }) {
       0.96,
       wound.value + (dt * speed.value) / REEL_SECONDS
     );
+    // The packs and the tape path are SVG, redrawn whole on every change, so
+    // they follow the wind in visible steps rather than every frame.
+    const step = Math.round(wound.value * WIND_STEPS) / WIND_STEPS;
+    if (step !== packWound.value) packWound.value = step;
   });
 
   const cardStyle = useAnimatedStyle(() => ({
@@ -90,7 +114,7 @@ export function TapeMachine(_props: { block: MarkdownVideoBlock }) {
   }));
 
   return (
-    <Animated.View style={[styles.card, cardStyle]}>
+    <Animated.View ref={anchor} style={[styles.card, cardStyle]}>
       <View style={styles.labels}>
         <TapeBox />
         <View style={styles.tape}>
@@ -101,10 +125,10 @@ export function TapeMachine(_props: { block: MarkdownVideoBlock }) {
         </View>
       </View>
       <View style={styles.deck}>
-        <TapePath wound={wound} />
+        <TapePath wound={packWound} />
         <View style={styles.reels}>
-          <Reel angle={supplyAngle} wound={wound} side="supply" />
-          <Reel angle={takeUpAngle} wound={wound} side="takeUp" />
+          <Reel angle={supplyAngle} wound={packWound} side="supply" />
+          <Reel angle={takeUpAngle} wound={packWound} side="takeUp" />
         </View>
         <View style={styles.headBlock}>
           <Text style={styles.headText}>RVG</Text>
@@ -281,6 +305,8 @@ function TapePath({ wound }: { wound: SharedValue<number> }) {
   );
 }
 
+// The face is static SVG; the needle is a plain view turned on the UI thread,
+// so the swing never redraws the scale.
 function Meter({
   needle,
   channel,
@@ -290,48 +316,82 @@ function Meter({
   channel: string;
   glow: SharedValue<number>;
 }) {
-  const needleProps = useAnimatedProps(() => {
-    const a = ((-48 + Math.min(1.08, needle.value) * 96) * Math.PI) / 180;
-    return { x2: 90 + 88 * Math.sin(a), y2: 112 - 88 * Math.cos(a) };
-  });
+  const [width, setWidth] = useState(0);
+  const unit = width / 180;
+  const length = 88 * unit;
+  const needleStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${-48 + Math.min(1.08, needle.value) * 96}deg` }],
+  }));
   const glowStyle = useAnimatedStyle(() => ({ opacity: glow.value * 0.35 }));
   return (
-    <View style={styles.meter}>
+    <View
+      style={styles.meter}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+    >
       <Animated.View style={[styles.meterGlow, glowStyle]} />
-      <Svg width="100%" height="100%" viewBox="0 0 180 100">
-        <Scale />
-        <SvgText
-          x={90}
-          y={74}
-          textAnchor="middle"
-          fontFamily={FONTS.display}
-          fontSize={18}
-          fill={NIGHT}
-        >
-          VU
-        </SvgText>
-        <SvgText
-          x={14}
-          y={92}
-          fontFamily={FONTS.mono}
-          fontSize={9}
-          fill={NIGHT}
-          fillOpacity={0.6}
-        >
-          {channel}
-        </SvgText>
-        <AnimatedLine
-          x1={90}
-          y1={112}
-          animatedProps={needleProps}
-          stroke="#16130F"
-          strokeWidth={1.6}
-        />
-        <Circle cx={90} cy={104} r={6} fill="#2A2621" />
-      </Svg>
+      <MeterFace channel={channel} />
+      {width > 0 && (
+        <>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.needleArm,
+              {
+                left: 90 * unit - 1,
+                top: 112 * unit - length,
+                height: length * 2,
+              },
+              needleStyle,
+            ]}
+          >
+            <View style={[styles.needle, { height: length }]} />
+          </Animated.View>
+          <View
+            pointerEvents="none"
+            style={[
+              styles.needleHub,
+              {
+                left: 90 * unit - 6 * unit,
+                top: 104 * unit - 6 * unit,
+                width: 12 * unit,
+                height: 12 * unit,
+                borderRadius: 6 * unit,
+              },
+            ]}
+          />
+        </>
+      )}
     </View>
   );
 }
+
+const MeterFace = memo(function MeterFace({ channel }: { channel: string }) {
+  return (
+    <Svg width="100%" height="100%" viewBox="0 0 180 100">
+      <Scale />
+      <SvgText
+        x={90}
+        y={74}
+        textAnchor="middle"
+        fontFamily={FONTS.display}
+        fontSize={18}
+        fill={NIGHT}
+      >
+        VU
+      </SvgText>
+      <SvgText
+        x={14}
+        y={92}
+        fontFamily={FONTS.mono}
+        fontSize={9}
+        fill={NIGHT}
+        fillOpacity={0.6}
+      >
+        {channel}
+      </SvgText>
+    </Svg>
+  );
+});
 
 const TICKS = [
   { at: 0, label: '20' },
@@ -555,6 +615,21 @@ const styles = StyleSheet.create({
   meterGlow: {
     ...StyleSheet.absoluteFill,
     backgroundColor: ORANGE,
+  },
+  // Twice the needle's length and centred on the pivot, so a plain rotate
+  // turns it around the pivot.
+  needleArm: {
+    position: 'absolute',
+    width: 2,
+  },
+  needle: {
+    width: 1.6,
+    marginLeft: 0.2,
+    backgroundColor: '#16130F',
+  },
+  needleHub: {
+    position: 'absolute',
+    backgroundColor: '#2A2621',
   },
   controls: {
     flexDirection: 'row',

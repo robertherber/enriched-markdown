@@ -26,8 +26,9 @@ import Svg, {
   TextPath,
 } from 'react-native-svg';
 import type { MarkdownLinkBlock } from 'react-native-enriched-markdown';
-import type { TrackId } from '../audio/scores';
-import { usePlayer } from '../player';
+import { useAnchor } from '../anchors';
+import type { TrackId } from '../audio/harmony';
+import { usePlayer, usePlayerState } from '../player';
 import {
   BLUE,
   BRASS,
@@ -40,7 +41,7 @@ import {
   SMOKE,
   SMOKE_EDGE,
 } from '../theme';
-import { SETTLE, SWING, formatTime, useEntrance } from './motion';
+import { CUE_DELAY_MS, SETTLE, SWING, formatTime, useEntrance } from './motion';
 import { SourceNote } from './SourceNote';
 import { useArtwork } from './useArtwork';
 
@@ -87,9 +88,11 @@ const PLAY_DEG_PER_S = 200;
 export function Record({ block }: { block: MarkdownLinkBlock }) {
   const album = albumFor(block.url)!;
   const player = usePlayer();
-  const playing = player.track === album.track;
+  const playing = usePlayerState((s) => s.track === album.track);
+  const loading = usePlayerState((s) => s.loading === album.track);
   const [width, setWidth] = useState(0);
   const [catalog = '', date = ''] = block.title.split(' · ');
+  const anchor = useAnchor(album.track);
 
   const enter = useEntrance(700);
   const peek = useEntrance(900, 350, SETTLE);
@@ -115,6 +118,13 @@ export function Record({ block }: { block: MarkdownLinkBlock }) {
       );
     }
   }, [playing, on, out, arm]);
+
+  // The first card to land puts the music on, once its entrance has settled.
+  const { cue } = player;
+  useEffect(() => {
+    const timer = setTimeout(cue, CUE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [cue]);
 
   // The platter spins up quickly and coasts down slowly, like a real one.
   useFrameCallback(({ timeSincePreviousFrame }) => {
@@ -160,7 +170,7 @@ export function Record({ block }: { block: MarkdownLinkBlock }) {
   }));
 
   return (
-    <Animated.View style={[styles.card, cardStyle]}>
+    <Animated.View ref={anchor} style={[styles.card, cardStyle]}>
       <View
         style={styles.stage}
         onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
@@ -204,7 +214,7 @@ export function Record({ block }: { block: MarkdownLinkBlock }) {
           </View>
           <PlayButton
             playing={playing}
-            loading={player.loading === album.track}
+            loading={loading}
             onPress={() => player.toggle(album.track)}
             label={block.label}
           />
@@ -317,8 +327,9 @@ function Progress({
       }
     }
   );
+  // A transform, not a width, so the bar moves without a layout pass.
   const fillStyle = useAnimatedStyle(() => ({
-    width: `${(playing ? progress.value : 0) * 100}%`,
+    transform: [{ scaleX: playing ? progress.value : 0 }],
   }));
   return (
     <View>
@@ -505,8 +516,7 @@ function Tonearm({
   );
 }
 
-// The real cover while the real record plays; the drawn sleeve stands under
-// it for the sketches and until the art arrives.
+// The real cover; the drawn sleeve stands under it until the art arrives.
 function Cover({ album }: { album: Album }) {
   const uri = useArtwork(album.track);
   const shown = useSharedValue(0);
@@ -900,6 +910,7 @@ const styles = StyleSheet.create({
   trackFill: {
     height: '100%',
     backgroundColor: BRASS,
+    transformOrigin: 'left',
   },
   rpm: {
     fontFamily: FONTS.mono,

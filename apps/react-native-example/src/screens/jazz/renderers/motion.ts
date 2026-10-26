@@ -10,6 +10,9 @@ import {
 // entrance waits that out instead of spending its first frames off screen.
 const PLACEMENT_DELAY = 100;
 
+// A record is cued after its card's entrance, so it plays from a settled card.
+export const CUE_DELAY_MS = 600;
+
 export const SETTLE = Easing.out(Easing.cubic);
 export const OVERSHOOT = Easing.out(Easing.back(1.5));
 export const SWING = Easing.inOut(Easing.cubic);

@@ -1,13 +1,12 @@
 import {
   AudioContext,
   AudioManager,
-  type AnalyserNode,
   type AudioBuffer,
   type AudioBufferSourceNode,
   type GainNode,
 } from 'react-native-audio-api';
 import { RECORDINGS, previewUrl } from './recordings';
-import { SCORES, type Score, type TrackId } from './scores';
+import type { TrackId } from './harmony';
 import {
   createVoices,
   crackle,
@@ -17,13 +16,8 @@ import {
   type VoiceName,
 } from './synth';
 
-const LOOKAHEAD_S = 0.6;
-const TICK_MS = 200;
-// Mastered records sit lower in RMS than the raw synth.
+// Mastered records sit low in RMS; this brings them up to the meters' range.
 const RECORDING_METER_GAIN = 4.2;
-const SYNTH_METER_GAIN = 2.6;
-
-export type SoundSource = 'recording' | 'synth';
 
 export const ENVELOPE_RATE = 30;
 
@@ -32,15 +26,13 @@ export const ENVELOPE_RATE = 30;
 export interface Timeline {
   // `Date.now()` when the first sample is heard.
   startedAt: number;
-  // Seconds in one pass of the record.
+  // Seconds of the preview.
   length: number;
-  loops: boolean;
-  // When each chord starts within one pass, as [seconds, chord index], for
-  // the changes wheel; null when there are no changes to follow.
+  // When each chord starts, as [seconds, chord index], for the changes
+  // wheel; null when there are no changes to follow.
   changes: Array<[number, number]> | null;
-  // Loudness per 1 / ENVELOPE_RATE seconds, measured once for a recording;
-  // the synth is metered live instead.
-  envelope: number[] | null;
+  // Loudness per 1 / ENVELOPE_RATE seconds, measured once from the preview.
+  envelope: number[];
 }
 
 interface Decoded {
@@ -71,25 +63,16 @@ function loudness(buffer: AudioBuffer) {
   return envelope;
 }
 
-// Off-beat eighths land late by the score's swing; everything else is
-// played as written.
-function swung(beat: number, swing: number) {
-  const whole = Math.floor(beat);
-  const fraction = beat - whole;
-  return whole + (Math.abs(fraction - 0.5) < 1e-3 ? swing : fraction);
-}
-
 // One turntable for the whole screen: starting a record stops the one before
-// it. A record plays either its real preview or the synthesised combo.
+// it. Records play Apple's preview; the synth voices only answer one-off
+// strikes, like a chord tapped on the wheel.
 class JazzEngine {
   private ctx: AudioContext | null = null;
   private input!: GainNode;
   // Recordings skip the synth's room and saturation.
   private clean!: GainNode;
-  private analyser!: AnalyserNode;
   private noise!: AudioBuffer;
   private surfaceNoise!: AudioBuffer;
-  private samples = new Float32Array(512);
   private playback: Playback | null = null;
 
   private context() {
@@ -114,16 +97,13 @@ class JazzEngine {
     tone.frequency.value = 7200;
     const shaper = ctx.createWaveShaper();
     shaper.curve = softClipCurve();
-    this.analyser = ctx.createAnalyser();
-    this.analyser.fftSize = 512;
 
     this.input.connect(room);
     room.connect(tone);
     tone.connect(shaper);
-    shaper.connect(this.analyser);
-    this.analyser.connect(ctx.destination);
+    shaper.connect(ctx.destination);
     this.clean = ctx.createGain();
-    this.clean.connect(this.analyser);
+    this.clean.connect(ctx.destination);
 
     this.noise = whiteNoise(ctx);
     this.surfaceNoise = crackle(ctx);
@@ -151,18 +131,22 @@ class JazzEngine {
     return Date.now() + (at - ctx.currentTime) * 1000;
   }
 
-  async play(track: TrackId, source: SoundSource) {
+  async play(track: TrackId) {
     this.stop();
     const request = this.request;
     const ctx = this.context();
     await ctx.resume();
-    if (source === 'synth') {
-      this.playScore(ctx, track);
-      return;
-    }
     const decoded = await this.recording(ctx, track);
     if (request !== this.request) return;
     this.playRecording(ctx, track, decoded);
+  }
+
+  // Fetches and decodes every preview ahead of play.
+  prefetch() {
+    const ctx = this.context();
+    for (const track of Object.keys(RECORDINGS) as TrackId[]) {
+      this.recording(ctx, track).catch(() => {});
+    }
   }
 
   private recording(ctx: AudioContext, track: TrackId) {
@@ -218,53 +202,8 @@ class JazzEngine {
       timeline: {
         startedAt: this.wallClock(ctx, start),
         length: buffer.duration,
-        loops: false,
         changes: changes ?? null,
         envelope,
-      },
-    };
-  }
-
-  private playScore(ctx: AudioContext, track: TrackId) {
-    const score: Score = SCORES[track];
-    const bus = ctx.createGain();
-    bus.connect(this.input);
-    const voices = createVoices(ctx, bus, this.noise);
-    const surface = this.surface(ctx, bus, 1);
-    const start = ctx.currentTime + 0.15;
-
-    const spb = 60 / score.bpm;
-    let loop = 0;
-    let cursor = 0;
-    const schedule = () => {
-      const horizon = ctx.currentTime + LOOKAHEAD_S;
-      for (;;) {
-        const note = score.notes[cursor]!;
-        const from = swung(note.at, score.swing);
-        const t = start + (loop * score.beats + from) * spb;
-        if (t > horizon) break;
-        const len = (swung(note.at + note.len, score.swing) - from) * spb;
-        voices[note.voice](t, len, note.midi, note.vel);
-        cursor++;
-        if (cursor === score.notes.length) {
-          cursor = 0;
-          loop++;
-        }
-      }
-    };
-    schedule();
-    const timer = setInterval(schedule, TICK_MS);
-    this.playback = {
-      track,
-      bus,
-      surface,
-      stopSource: () => clearInterval(timer),
-      timeline: {
-        startedAt: this.wallClock(ctx, start),
-        length: score.beats * spb,
-        loops: true,
-        changes: score.chords.map((chord, i) => [chord.at * spb, i]),
-        envelope: null,
       },
     };
   }
@@ -279,18 +218,6 @@ class JazzEngine {
     playback.stopSource(now + 0.6);
     playback.surface?.stop(now + 0.6);
     setTimeout(() => playback.bus.disconnect(), 700);
-  }
-
-  // A loudness in [0, 1] for meters, from the master output: the synth's
-  // live level, since it has no envelope measured ahead.
-  level() {
-    if (!this.ctx) return 0;
-    this.analyser.getFloatTimeDomainData(this.samples);
-    let sum = 0;
-    for (let i = 0; i < this.samples.length; i++) {
-      sum += this.samples[i]! * this.samples[i]!;
-    }
-    return Math.min(1, Math.sqrt(sum / this.samples.length) * SYNTH_METER_GAIN);
   }
 
   // A one-off strike outside any record, like a chord played on the wheel.

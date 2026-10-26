@@ -2741,7 +2741,7 @@ SPEC CHECKSUMS:
   React-viewtransitionnativemodule: 8505b253586f792c6c722869a664889797ecae3e
   React-webperformancenativemodule: 67f32fde92ed7e8470ee1c669bdb7c2fcb760141
   ReactAppDependencyProvider: 782ee9546c9cd3b53b73f1e9e3dd728540085fc7
-  ReactCodegen: 7b71f4464442e9b6eae41094d11076d56c51c0e3
+  ReactCodegen: c08350fd2a8a61d5faf2b6e447f9281543e3b162
   ReactCommon: 145a14b942b19fc2fe38927f261955ada56978aa
   ReactNativeDependencies: d3b7423ba1e52525e42085c8470109abde583d2e
   ReactNativeEnrichedMarkdown: 92676d949c09c54965b0b0ea3865c7d0e57c32b6
@@ -2749,7 +2749,7 @@ SPEC CHECKSUMS:
   RNCAsyncStorage: 3a34af458c28403fc907178ac44bee8f6960ced1
   RNDateTimePicker: b541d17d1cc0b28b52063d455a0e347e52282e1e
   RNGestureHandler: 0124c0b5117c1376f013aaac888ed4134ca88b58
-  RNReanimated: 3018727dbf272754d0f31ef73f619e49ade7baf0
+  RNReanimated: aabc324a3906abce583eb2cfd78f6f63397d2de6
   RNScreens: 6d0d3b7819284dbf9f222899eb819f069fce4b8b
   RNSVG: 2763b18e0405296e97c651358716e997ce041b1f
   RNWorklets: 488806637a21eb17812a48dadca7cb8c698c8cfd

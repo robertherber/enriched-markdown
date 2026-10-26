@@ -1,4 +1,4 @@
-import type { TrackId } from './scores';
+import type { TrackId } from './harmony';
 
 // The real records, as the 30-second previews and cover art Apple serves for
 // its store. They are streamed, never bundled: the masters and the covers are

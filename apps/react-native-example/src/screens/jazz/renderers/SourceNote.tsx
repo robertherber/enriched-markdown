@@ -1,11 +1,10 @@
 import { Linking, Pressable, StyleSheet, Text } from 'react-native';
 import { storeUrl } from '../audio/recordings';
-import type { TrackId } from '../audio/scores';
-import { usePlayer } from '../player';
+import type { TrackId } from '../audio/harmony';
 import { BRASS, FONTS } from '../theme';
 
 // Says what is playing: Apple's preview of the real record, linked back to
-// the store as its terms ask, or the synthesised sketch.
+// the store as its terms ask.
 export function SourceNote({
   track,
   prefix,
@@ -13,15 +12,7 @@ export function SourceNote({
   track: TrackId;
   prefix?: string;
 }) {
-  const { source } = usePlayer();
   const lead = prefix ? `${prefix} · ` : '';
-  if (source === 'synth') {
-    return (
-      <Text style={styles.note}>
-        {`${lead}SYNTHESISED SKETCH · NOT THE ORIGINAL RECORDING`}
-      </Text>
-    );
-  }
   return (
     <Pressable
       onPress={() => Linking.openURL(storeUrl(track))}

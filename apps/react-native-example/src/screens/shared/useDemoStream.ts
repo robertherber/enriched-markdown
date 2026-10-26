@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   LayoutChangeEvent,
   NativeScrollEvent,
@@ -36,27 +36,36 @@ export function closeOpenEmphasis(text: string) {
   return open.length === 0 ? body : body.trimEnd() + open.reverse().join('');
 }
 
+const BLOCK_LINE = /^\n*(!\[|\[|<video)/;
+
 // Lines that become a renderer arrive in one tick, like a model finishing a
 // URL, and the stream breathes afterwards so the block can make its entrance.
 export function nextCursor(source: string, cursor: number) {
   let start = cursor;
   while (source[start] === '\n') start++;
   const atLineStart = start === 0 || source[start - 1] === '\n';
-  if (atLineStart && /^(!\[|\[|<video)/.test(source.slice(start))) {
+  if (atLineStart && BLOCK_LINE.test(source.slice(start))) {
     const end = source.indexOf('\n', start);
     return { cursor: end === -1 ? source.length : end + 1, pause: true };
   }
-  return {
-    cursor: Math.min(cursor + CHARS_PER_TICK, source.length),
-    pause: false,
-  };
+  // Text stops at the start of a renderer line rather than stepping into it,
+  // so the next tick takes the whole line.
+  let end = Math.min(cursor + CHARS_PER_TICK, source.length);
+  for (let i = source.indexOf('\n', cursor); i !== -1 && i < end; ) {
+    if (BLOCK_LINE.test(source.slice(i + 1))) {
+      end = i + 1;
+      break;
+    }
+    i = source.indexOf('\n', i + 1);
+  }
+  return { cursor: end, pause: false };
 }
 
 type ScrollEvent = NativeSyntheticEvent<NativeScrollEvent>;
 
-// Streams `source` like a model answer and keeps the scroll view following
-// the bottom until the reader drags away.
-export function useDemoStream(source: string) {
+// Streams `source` like a model answer, `startDelay` ms after the prompt, and
+// keeps the scroll view following the bottom until the reader drags away.
+export function useDemoStream(source: string, startDelay = START_DELAY_MS) {
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const following = useSharedValue(true);
   const viewport = useSharedValue(0);
@@ -78,9 +87,9 @@ export function useDemoStream(source: string) {
         timer = setTimeout(tick, next.pause ? BLOCK_PAUSE_MS : TICK_MS);
       }
     };
-    timer = setTimeout(tick, START_DELAY_MS);
+    timer = setTimeout(tick, startDelay);
     return () => clearTimeout(timer);
-  }, [source, run]);
+  }, [source, run, startDelay]);
 
   // Eases towards the bottom on the UI thread, so the follow stays smooth however
   // often the stream ticks or a block grows the content.
@@ -109,6 +118,16 @@ export function useDemoStream(source: string) {
     [following, target, follow]
   );
 
+  // Leaves the follow for a place in the answer, as a drag would.
+  const jump = useCallback(
+    (y: number) => {
+      following.value = false;
+      setDetached(true);
+      scrollRef.current?.scrollTo({ y, animated: true });
+    },
+    [following, scrollRef]
+  );
+
   const replay = useCallback(() => {
     following.value = true;
     target.value = 0;
@@ -121,15 +140,9 @@ export function useDemoStream(source: string) {
 
   const streaming = cursor < source.length;
 
-  return {
-    run,
-    streaming,
-    writing: streaming && cursor > 0,
-    markdown: streaming ? closeOpenEmphasis(source.slice(0, cursor)) : source,
-    detached,
-    follow,
-    replay,
-    scrollProps: {
+  // Stable across ticks, so the scroll view does not re-render as text grows.
+  const scrollProps = useMemo(
+    () => ({
       ref: scrollRef,
       onLayout: (event: LayoutChangeEvent) => {
         viewport.value = event.nativeEvent.layout.height;
@@ -143,6 +156,19 @@ export function useDemoStream(source: string) {
       onContentSizeChange: (_: number, height: number) => {
         target.value = Math.max(0, height - viewport.value);
       },
-    },
+    }),
+    [scrollRef, viewport, following, rejoinAtBottom, target]
+  );
+
+  return {
+    run,
+    streaming,
+    writing: streaming && cursor > 0,
+    markdown: streaming ? closeOpenEmphasis(source.slice(0, cursor)) : source,
+    detached,
+    follow,
+    jump,
+    replay,
+    scrollProps,
   };
 }

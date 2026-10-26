@@ -1,4 +1,4 @@
-import { memo, useEffect } from 'react';
+import { memo, useCallback, useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   FadeInDown,
@@ -21,10 +21,11 @@ import Svg, {
 } from 'react-native-svg';
 import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
 import { useDemoStream } from '../shared/useDemoStream';
-import type { SoundSource } from './audio/engine';
-import type { TrackId } from './audio/scores';
+import type { TrackId } from './audio/harmony';
+import { DuoLinerNotes } from './duo/DuoLinerNotes';
+import { useHinge } from './hinge';
 import { LINER_NOTES_MARKDOWN, PROMPT } from './linerNotesMarkdown';
-import { PlayerProvider, usePlayer } from './player';
+import { PlayerProvider, usePlayer, usePlayerState } from './player';
 import { linerNotesRenderers } from './renderers';
 import {
   BLUE,
@@ -38,96 +39,160 @@ import {
   SMOKE,
   SMOKE_EDGE,
   linerMarkdownStyle,
+  linerSelection,
 } from './theme';
 
-const NOW_PLAYING: Record<TrackId, { title: string; color: string }> = {
+export const NOW_PLAYING: Record<TrackId, { title: string; color: string }> = {
   blueTrain: { title: 'Blue Train', color: BLUE },
   giantSteps: { title: 'Giant Steps', color: RED },
   loveSupreme: { title: 'A Love Supreme', color: ORANGE },
 };
 
 export default function LinerNotesScreen() {
+  const hinge = useHinge();
   return (
     <PlayerProvider>
-      <LinerNotes />
+      {!hinge.known ? (
+        <View style={styles.root} />
+      ) : hinge.available ? (
+        <DuoLinerNotes hinge={hinge} />
+      ) : (
+        <LinerNotes />
+      )}
     </PlayerProvider>
   );
 }
 
-function LinerNotes() {
+export function LinerNotes() {
   const insets = useSafeAreaInsets();
   const player = usePlayer();
   const stream = useDemoStream(LINER_NOTES_MARKDOWN);
+  const { setAutoCue, stop } = player;
+  const { replay: replayStream } = stream;
+  // A replay cues its first record again.
+  useEffect(
+    () => setAutoCue(stream.streaming),
+    [setAutoCue, stream.streaming, stream.run]
+  );
+  const replay = useCallback(() => {
+    stop();
+    replayStream();
+  }, [stop, replayStream]);
+  const contentStyle = useMemo(
+    () => [styles.content, { paddingBottom: insets.bottom + 140 }],
+    [insets.bottom]
+  );
 
+  // Only the markdown changes on a stream tick; the header and the dock are
+  // memoised and read the player state they show themselves.
   return (
     <View style={styles.root}>
       <Spotlight />
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <MiniDisc color={ORANGE} spinning={player.track !== null} size={38} />
-        <View style={styles.headerTitles}>
-          <Text style={styles.headerTitle}>LINER NOTES</Text>
-          <Text style={styles.headerSub}>
-            {stream.writing ? 'writing…' : 'a life in records'}
-          </Text>
-        </View>
-        <SourceSwitch />
-        <Pressable
-          onPress={() => {
-            player.stop();
-            stream.replay();
-          }}
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="Replay the answer"
-          testID="liner-notes-replay"
-        >
-          <Text style={styles.replay}>↻</Text>
-        </Pressable>
-      </View>
+      <Header top={insets.top} writing={stream.writing} onReplay={replay} />
       <Animated.ScrollView
         {...stream.scrollProps}
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: insets.bottom + 140 },
-        ]}
+        contentContainerStyle={contentStyle}
       >
-        <View style={styles.prompt}>
-          <Text style={styles.promptLabel}>YOU</Text>
-          <Text style={styles.promptText}>{PROMPT}</Text>
-        </View>
+        <Prompt />
         <EnrichedMarkdownText
           key={stream.run}
           flavor="github"
           markdown={stream.markdown}
           markdownStyle={linerMarkdownStyle}
+          {...linerSelection}
           renderers={linerNotesRenderers}
           streamingAnimation={stream.streaming}
         />
         {!stream.streaming && <RunOut />}
       </Animated.ScrollView>
-      <View
-        style={[styles.dock, { bottom: insets.bottom + 16 }]}
-        pointerEvents="box-none"
-      >
-        {stream.streaming && stream.detached && (
-          <Animated.View
-            entering={FadeInDown.duration(220)}
-            exiting={FadeOutDown.duration(180)}
-          >
-            <Pressable
-              onPress={stream.follow}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Follow the answer"
-              style={styles.pill}
-            >
-              <Text style={styles.pillText}>↓ still writing</Text>
-            </Pressable>
-          </Animated.View>
-        )}
-        {player.track && <NowPlaying track={player.track} />}
-      </View>
+      <Dock
+        bottom={insets.bottom + 16}
+        writingBelow={stream.streaming && stream.detached}
+        onFollow={stream.follow}
+      />
     </View>
+  );
+}
+
+export const Header = memo(function Header({
+  top,
+  writing,
+  onReplay,
+}: {
+  top: number;
+  writing: boolean;
+  onReplay: () => void;
+}) {
+  return (
+    <View style={[styles.header, { paddingTop: top + 8 }]}>
+      <HeaderDisc />
+      <View style={styles.headerTitles}>
+        <Text style={styles.headerTitle}>LINER NOTES</Text>
+        <Text style={styles.headerSub}>
+          {writing ? 'writing…' : 'a life in records'}
+        </Text>
+      </View>
+      <Pressable
+        onPress={onReplay}
+        hitSlop={12}
+        accessibilityRole="button"
+        accessibilityLabel="Replay the answer"
+        testID="liner-notes-replay"
+      >
+        <Text style={styles.replay}>↻</Text>
+      </Pressable>
+    </View>
+  );
+});
+
+function HeaderDisc() {
+  const spinning = usePlayerState((s) => s.track !== null);
+  return <MiniDisc color={ORANGE} spinning={spinning} size={38} />;
+}
+
+export const Prompt = memo(function Prompt() {
+  return (
+    <View style={styles.prompt}>
+      <Text style={styles.promptLabel}>YOU</Text>
+      <Text style={styles.promptText}>{PROMPT}</Text>
+    </View>
+  );
+});
+
+const Dock = memo(function Dock({
+  bottom,
+  writingBelow,
+  onFollow,
+}: {
+  bottom: number;
+  writingBelow: boolean;
+  onFollow: () => void;
+}) {
+  const track = usePlayerState((s) => s.track);
+  return (
+    <View style={[styles.dock, { bottom }]} pointerEvents="box-none">
+      {writingBelow && <FollowPill onFollow={onFollow} />}
+      {track && <NowPlaying track={track} />}
+    </View>
+  );
+});
+
+export function FollowPill({ onFollow }: { onFollow: () => void }) {
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(220)}
+      exiting={FadeOutDown.duration(180)}
+    >
+      <Pressable
+        onPress={onFollow}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Follow the answer"
+        style={styles.pill}
+      >
+        <Text style={styles.pillText}>↓ still writing</Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -142,11 +207,7 @@ function NowPlaying({ track }: { track: TrackId }) {
     >
       <MiniDisc color={color} spinning size={34} />
       <View style={styles.nowTitles}>
-        <Text style={styles.nowKicker}>
-          {player.source === 'recording'
-            ? 'NOW PLAYING · PREVIEW'
-            : 'NOW PLAYING · SKETCH'}
-        </Text>
+        <Text style={styles.nowKicker}>NOW PLAYING · PREVIEW</Text>
         <Text style={styles.nowTitle} numberOfLines={1}>
           {`${title} · John Coltrane`}
         </Text>
@@ -165,42 +226,10 @@ function NowPlaying({ track }: { track: TrackId }) {
   );
 }
 
-const SOURCES: Array<{ source: SoundSource; label: string }> = [
-  { source: 'recording', label: 'RECORDS' },
-  { source: 'synth', label: 'SYNTH' },
-];
-
-// The real records' previews, or the combo synthesised on the device.
-function SourceSwitch() {
-  const player = usePlayer();
-  return (
-    <View style={styles.switch} accessibilityRole="radiogroup">
-      {SOURCES.map(({ source, label }) => {
-        const selected = player.source === source;
-        return (
-          <Pressable
-            key={source}
-            onPress={() => player.setSource(source)}
-            hitSlop={6}
-            accessibilityRole="radio"
-            accessibilityState={{ selected }}
-            testID={`liner-notes-source-${source}`}
-            style={[styles.switchOption, selected && styles.switchSelected]}
-          >
-            <Text style={[styles.switchText, selected && styles.switchTextOn]}>
-              {label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
 const BAR_GAINS = [0.7, 1, 0.55, 0.85];
 
 // Level bars driven by the master output, each with its own gain and wobble.
-function Bars() {
+export function Bars() {
   const { level } = usePlayer();
   return (
     <View style={styles.bars}>
@@ -223,13 +252,15 @@ function Bar({
   const style = useAnimatedStyle(() => {
     const wobble = 0.75 + 0.25 * Math.sin(Date.now() / (90 + phase * 37));
     return {
-      height: 4 + Math.min(1, level.value * gain * wobble) * 18,
+      transform: [
+        { scaleY: (4 + Math.min(1, level.value * gain * wobble) * 18) / 22 },
+      ],
     };
   });
   return <Animated.View style={[styles.bar, style]} />;
 }
 
-function MiniDisc({
+export const MiniDisc = memo(function MiniDisc({
   color,
   spinning,
   size,
@@ -277,10 +308,10 @@ function MiniDisc({
       </Svg>
     </Animated.View>
   );
-}
+});
 
 // The run-out groove at the end of the side, with the matrix scratched in.
-function RunOut() {
+export function RunOut() {
   const show = useSharedValue(0);
   useEffect(() => {
     show.value = withDelay(200, withTiming(1, { duration: 700 }));
@@ -299,7 +330,7 @@ function RunOut() {
   );
 }
 
-const Spotlight = memo(function Spotlight() {
+export const Spotlight = memo(function Spotlight() {
   return (
     <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
       <Defs>
@@ -350,31 +381,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.monoMedium,
     fontSize: 20,
     color: BRASS,
-  },
-  switch: {
-    flexDirection: 'row',
-    padding: 2,
-    borderRadius: 14,
-    backgroundColor: SMOKE,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: SMOKE_EDGE,
-  },
-  switchOption: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  switchSelected: {
-    backgroundColor: BRASS,
-  },
-  switchText: {
-    fontFamily: FONTS.monoMedium,
-    fontSize: 10,
-    letterSpacing: 1,
-    color: CREAM_SOFT,
-  },
-  switchTextOn: {
-    color: NIGHT,
   },
   content: {
     paddingHorizontal: 22,
@@ -464,8 +470,10 @@ const styles = StyleSheet.create({
   },
   bar: {
     width: 3,
+    height: 22,
     borderRadius: 2,
     backgroundColor: BRASS,
+    transformOrigin: 'bottom',
   },
   nowStop: {
     width: 32,

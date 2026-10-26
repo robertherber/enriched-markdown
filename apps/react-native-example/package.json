@@ -57,5 +57,21 @@
   },
   "engines": {
     "node": ">= 22.11.0"
+  },
+  "reanimated": {
+    "staticFeatureFlags": {
+      "IOS_SYNCHRONOUSLY_UPDATE_UI_PROPS": true,
+      "ANDROID_SYNCHRONOUSLY_UPDATE_UI_PROPS": true
+    }
+  },
+  "codegenConfig": {
+    "name": "ExampleSpecs",
+    "type": "modules",
+    "jsSrcsDir": "specs",
+    "ios": {
+      "modulesProvider": {
+        "Hinge": "Hinge"
+      }
+    }
   }
 }

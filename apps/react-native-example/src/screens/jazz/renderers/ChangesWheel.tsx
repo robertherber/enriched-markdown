@@ -1,8 +1,7 @@
-import { memo, useEffect, type ReactNode } from 'react';
+import { memo, useEffect, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   interpolate,
-  useAnimatedProps,
   useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
@@ -12,12 +11,14 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, G, Path, Text as SvgText } from 'react-native-svg';
 import type { MarkdownImageBlock } from 'react-native-enriched-markdown';
-import { GIANT_STEPS_CHANGES, NOTE_NAMES, type Quality } from '../audio/scores';
-import { usePlayer } from '../player';
+import {
+  GIANT_STEPS_CHANGES,
+  NOTE_NAMES,
+  type Quality,
+} from '../audio/harmony';
+import { usePlayer, usePlayerState } from '../player';
 import { BRASS, CREAM, CREAM_SOFT, FONTS, SMOKE, SMOKE_EDGE } from '../theme';
 import { SETTLE, useEntrance } from './motion';
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const SIZE = 300;
 const C = SIZE / 2;
@@ -77,7 +78,7 @@ function chordNotes(pc: number, quality: Quality) {
 // The marker follows Giant Steps while it plays; a tap plays a cadence.
 export function ChangesWheel({ block }: { block: MarkdownImageBlock }) {
   const player = usePlayer();
-  const following = player.track === 'giantSteps';
+  const following = usePlayerState((s) => s.track === 'giantSteps');
   const enter = useEntrance(800);
   const marker = useSharedValue(fifths(11));
   const pulse = useSharedValue(0);
@@ -117,7 +118,8 @@ export function ChangesWheel({ block }: { block: MarkdownImageBlock }) {
     if (following) return;
     lastChord.value = -1;
     shownPc.value = -1;
-  }, [following, lastChord, shownPc]);
+    moveMarker(marker, TONICS[0]!);
+  }, [following, lastChord, shownPc, marker]);
 
   const cadence = (tonic: number) => {
     const dominant = DOMINANT_OF[tonic]!;
@@ -173,7 +175,7 @@ export function ChangesWheel({ block }: { block: MarkdownImageBlock }) {
       <Text style={styles.hint}>
         {following
           ? 'following the record…'
-          : 'tap a key centre, or drop the needle below'}
+          : 'tap a key centre, or drop the needle above'}
       </Text>
     </Animated.View>
   );
@@ -328,6 +330,8 @@ const Triangle = memo(function Triangle() {
   );
 });
 
+// The marker is two plain views moved by transforms, so following the band
+// never redraws the wheel's SVG.
 function Marker({
   marker,
   pulse,
@@ -335,20 +339,59 @@ function Marker({
   marker: SharedValue<number>;
   pulse: SharedValue<number>;
 }) {
-  const haloProps = useAnimatedProps(() => {
+  const [width, setWidth] = useState(0);
+  const unit = width / SIZE;
+  const haloStyle = useAnimatedStyle(() => {
     const p = at(marker.value, PATH_R);
-    return { cx: p.x, cy: p.y, r: 14 + pulse.value * 8 };
+    return {
+      transform: [
+        { translateX: (p.x - 14) * unit },
+        { translateY: (p.y - 14) * unit },
+        { scale: 1 + pulse.value * 0.57 },
+      ],
+    };
   });
-  const coreProps = useAnimatedProps(() => {
+  const coreStyle = useAnimatedStyle(() => {
     const p = at(marker.value, PATH_R);
-    return { cx: p.x, cy: p.y };
+    return {
+      transform: [
+        { translateX: (p.x - 7) * unit },
+        { translateY: (p.y - 7) * unit },
+      ],
+    };
   });
   return (
-    <Svg
+    <View
       style={StyleSheet.absoluteFill}
-      viewBox={`0 0 ${SIZE} ${SIZE}`}
       pointerEvents="none"
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
     >
+      <Backdrop />
+      {width > 0 && (
+        <>
+          <Animated.View
+            style={[
+              styles.halo,
+              { width: 28 * unit, height: 28 * unit, borderRadius: 14 * unit },
+              haloStyle,
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.core,
+              { width: 14 * unit, height: 14 * unit, borderRadius: 7 * unit },
+              coreStyle,
+            ]}
+          />
+        </>
+      )}
+    </View>
+  );
+}
+
+const Backdrop = memo(function Backdrop() {
+  return (
+    <Svg style={StyleSheet.absoluteFill} viewBox={`0 0 ${SIZE} ${SIZE}`}>
       <Circle
         cx={C}
         cy={C}
@@ -357,15 +400,9 @@ function Marker({
         stroke={CREAM}
         strokeOpacity={0.12}
       />
-      <AnimatedCircle
-        animatedProps={haloProps}
-        fill={BRASS}
-        fillOpacity={0.25}
-      />
-      <AnimatedCircle animatedProps={coreProps} r={7} fill={CREAM} />
     </Svg>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {
@@ -389,6 +426,15 @@ const styles = StyleSheet.create({
   wheel: {
     aspectRatio: 1,
     marginTop: 8,
+  },
+  halo: {
+    position: 'absolute',
+    backgroundColor: BRASS,
+    opacity: 0.25,
+  },
+  core: {
+    position: 'absolute',
+    backgroundColor: CREAM,
   },
   center: {
     ...StyleSheet.absoluteFill,
