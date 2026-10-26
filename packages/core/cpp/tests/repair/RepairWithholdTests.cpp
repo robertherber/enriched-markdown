@@ -155,3 +155,48 @@ TEST_CASE("closers go before trailing whitespace") {
   CHECK(repair("**bold\t", RepairOptions()) == "**bold**\t");
   CHECK(repair("**bold\r\n", RepairOptions()) == "**bold**\r\n");
 }
+
+// Known bugs. Each case asserts the intended output and fails until the bug
+// is fixed.
+
+TEST_CASE("known bug: a finished code span of opener characters is withheld") {
+  CHECK(repair("Press `*`") == "Press `*`");
+  CHECK(repair("use `=`") == "use `=`");
+  CHECK(repair("Op `||`") == "Op `||`");
+  CHECK(repair("| a |\n|---|\n| `|` |") == "| a |\n|---|\n| `|` |");
+}
+
+TEST_CASE("known bug: math opened in a finished heading withholds the next paragraph") {
+  CHECK(repair("# Cost in $USD\nSome text", withholdingMath()) == "# Cost in $USD\nSome text");
+}
+
+TEST_CASE("known bug: math opened in a finished heading hides emphasis below it") {
+  RepairOptions o;
+  o.inlineMath = true;
+  o.withholdMath = true;
+  CHECK(repair("# Cost $USD\nsome _it", o) == "# Cost $USD\nsome _it_");
+}
+
+TEST_CASE("known bug: a finished thematic break is withheld") {
+  CHECK(repair("Intro\n\n***\n") == "Intro\n\n***\n");
+  CHECK(repair("Intro\n\n___\n") == "Intro\n\n___\n");
+  CHECK(repair("Intro\n\n* * *\n") == "Intro\n\n* * *\n");
+}
+
+TEST_CASE("known bug: a closing fence being typed inside a longer fence shows") {
+  CHECK(repair("````\ncode\n```") == "````\ncode\n");
+}
+
+TEST_CASE("known bug: a no-break space before a withheld opener stays") {
+  CHECK(repair("Hello\xC2\xA0**") == "Hello");
+}
+
+// md4c lets a `$` open after any Unicode punctuation, not only ASCII.
+TEST_CASE("known bug: a dollar after Unicode punctuation is not withheld") {
+  CHECK(repair("See \xC2\xAB$x", withholdingMath()) == "See \xC2\xAB");
+}
+
+// md4c reads `$a $$b$$ _c` as literal `$a`, display math `b` and an open `_c`.
+TEST_CASE("known bug: a display span inside an open inline one hides emphasis after it") {
+  CHECK(repair("$a $$b$$ _c", withholdingMath()) == "$a $$b$$ _c_");
+}
