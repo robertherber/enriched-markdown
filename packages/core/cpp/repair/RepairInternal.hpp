@@ -22,6 +22,10 @@
 
 #include "MarkdownRepair.hpp"
 
+namespace Markdown::UnicodeTables {
+struct Range;
+}
+
 namespace Markdown::RepairInternal {
 
 constexpr size_t npos = std::string_view::npos;
@@ -64,6 +68,11 @@ bool isSpaceTabNewline(uint32_t codePoint);
 bool isAsciiDigit(char c);
 bool isAsciiLetterOrSlash(char c);
 
+bool inRanges(uint32_t codePoint, const UnicodeTables::Range *ranges, size_t count);
+
+// md4c's ISUNICODEPUNCT: Unicode general categories P and S.
+bool isUnicodePunctuation(uint32_t codePoint);
+
 std::string_view jsTrimStart(std::string_view text);
 std::string_view jsTrimEnd(std::string_view text);
 std::string_view jsTrim(std::string_view text);
@@ -84,14 +93,20 @@ bool isEscaped(std::string_view text, size_t i);
 
 bool isTripleAt(std::string_view text, size_t i);
 
-// A fence marker: ``` anywhere, as the reference counts it, or ~~~ with only
-// indentation before it on its line. `fence` is the character of the open
-// fence, or 0. A marker of the other character inside an open fence is
-// content. When a marker is consumed, i is advanced to its last byte (the
-// caller's loop takes the final step) and the result is true.
-bool consumeFence(std::string_view text, size_t &i, char &fence);
+// A fence marker: three or more backticks anywhere, as the reference counts
+// them, or tildes with only indentation before them on their line. `fence`
+// is the open fence, or none. Inside an open fence a run of the other
+// character, or a shorter run of the same one, is content. When a marker is
+// consumed, i is advanced to its last byte (the caller's loop takes the
+// final step) and the result is true.
+struct Fence {
+  char c = 0;
+  size_t length = 0;
+};
+bool consumeFence(std::string_view text, size_t &i, Fence &fence);
 
-// The text ends inside an unclosed fence.
+// The fence the text ends inside, or none.
+Fence unclosedFence(std::string_view text);
 bool endsInsideFence(std::string_view text);
 
 // Non-overlapping occurrence count, like text.match(/needle/g).length.
@@ -325,9 +340,9 @@ private:
 // visitor returns true to stop early and may advance `i` past bytes it
 // consumed; most leave it alone.
 template <class Visitor> void scanOutsideFences(std::string_view text, Visitor visit) {
-  char fence = 0;
+  Fence fence;
   for (size_t i = 0; i < text.size(); ++i) {
-    if (consumeFence(text, i, fence) || fence != 0) {
+    if (consumeFence(text, i, fence) || fence.c != 0) {
       continue;
     }
     if (visit(i)) {

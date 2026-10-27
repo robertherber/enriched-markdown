@@ -8,7 +8,7 @@ using namespace RepairInternal;
 
 namespace {
 
-constexpr std::string_view kOpenerChars = "*_~`=|";
+constexpr std::string_view kOpenerChars = "*_~`";
 
 bool isSpaceOrTab(char c) {
   return c == ' ' || c == '\t';
@@ -33,23 +33,29 @@ size_t lastLineStart(std::string_view text) {
   return newline == npos ? 0 : newline + 1;
 }
 
+std::string_view lastLine(std::string_view text, size_t &depth) {
+  return stripBlockquotes(text.substr(lastLineStart(text)), depth);
+}
+
 void eraseFrom(RepairContext &ctx, std::string_view text, size_t position) {
-  while (position > 0 && isSpaceOrTab(text[position - 1])) {
-    --position;
+  while (position > 0) {
+    const uint32_t before = codePointBefore(text, position);
+    if (before == '\n' || before == '\r' || !isJsWhitespace(before)) {
+      break;
+    }
+    position = codePointStartBefore(text, position);
   }
   ctx.erase(position);
 }
 
-void withholdPartialFence(RepairContext &ctx) {
+void withholdPartialFence(RepairContext &ctx, const Fence &fence) {
   const std::string_view text = body(ctx);
-  const size_t lineStart = lastLineStart(text);
   size_t depth = 0;
-  const std::string_view line = trimSpaces(stripBlockquotes(text.substr(lineStart), depth));
-  if (line.empty() || line.size() > 2 || (line[0] != '`' && line[0] != '~') ||
-      line.find_first_not_of(line[0]) != npos) {
+  const std::string_view line = trimSpaces(lastLine(text, depth));
+  if (line.empty() || line.size() >= fence.length || line.find_first_not_of(fence.c) != npos) {
     return;
   }
-  ctx.erase(lineStart);
+  ctx.erase(lastLineStart(text));
 }
 
 bool isMarkerOnlyLine(std::string_view line) {
@@ -57,6 +63,9 @@ bool isMarkerOnlyLine(std::string_view line) {
   const std::string_view rest = trimSpaces(stripBlockquotes(line, depth));
   if (rest.empty()) {
     return depth > 0;
+  }
+  if (rest.find_first_not_of("| ") == npos) {
+    return true;
   }
   const char first = rest[0];
   if ((first == '#' || first == '=' || first == '-' || first == '`' || first == '~') &&
@@ -97,16 +106,35 @@ bool isFenceLine(std::string_view text, size_t start) {
   return lineBefore(text, start).find_first_not_of(" \t>") == npos;
 }
 
+bool isFinishedRule(const RepairContext &ctx, std::string_view text) {
+  size_t depth = 0;
+  const std::string_view line = lastLine(text, depth);
+  return (isHorizontalRuleLine(line, '*') || isHorizontalRuleLine(line, '_')) &&
+         ctx.text().find('\n', text.size()) != npos;
+}
+
+size_t openerRunStart(std::string_view text, const CodeLookup &code) {
+  size_t start = text.size();
+  while (start > 0 && !code.inside(start - 1)) {
+    const char c = text[start - 1];
+    if (kOpenerChars.find(c) != npos) {
+      --start;
+    } else if ((c == '|' || c == '=') && start > 1 && text[start - 2] == c) {
+      start -= 2;
+    } else {
+      break;
+    }
+  }
+  return start;
+}
+
 void withholdEmptyOpener(RepairContext &ctx) {
   const std::string_view text = body(ctx);
-  size_t start = text.size();
-  while (start > 0 && kOpenerChars.find(text[start - 1]) != npos) {
-    --start;
-  }
+  const size_t start = openerRunStart(text, ctx.code());
   if (start == text.size() || (start > 0 && !isJsWhitespace(codePointBefore(text, start)))) {
     return;
   }
-  if (ctx.code().inside(start) || isFenceLine(text, start)) {
+  if (isFenceLine(text, start) || isFinishedRule(ctx, text)) {
     return;
   }
   eraseFrom(ctx, text, start);
@@ -179,24 +207,25 @@ void withholdUnclosedMath(RepairContext &ctx, bool inlineDollar, bool displayDol
 } // namespace
 
 void withhold(RepairContext &ctx, const RepairOptions &options) {
-  if (endsInsideFence(ctx.text())) {
+  const Fence fence = unclosedFence(ctx.text());
+  if (fence.c != 0) {
     if (options.withholdIncomplete) {
-      withholdPartialFence(ctx);
+      withholdPartialFence(ctx, fence);
     }
     return;
   }
-  const bool math = options.withholdMath && (options.inlineMath || options.displayMath);
+  if (options.withholdMath && (options.inlineMath || options.displayMath)) {
+    withholdUnclosedMath(ctx, options.inlineMath, options.displayMath);
+  }
+  if (!options.withholdIncomplete) {
+    return;
+  }
   size_t size = 0;
   do {
     size = ctx.text().size();
-    if (math) {
-      withholdUnclosedMath(ctx, options.inlineMath, options.displayMath);
-    }
-    if (options.withholdIncomplete) {
-      withholdImageLabel(ctx);
-      withholdEmptyOpener(ctx);
-      withholdMarkerLine(ctx);
-    }
+    withholdImageLabel(ctx);
+    withholdEmptyOpener(ctx);
+    withholdMarkerLine(ctx);
   } while (ctx.text().size() != size);
 }
 

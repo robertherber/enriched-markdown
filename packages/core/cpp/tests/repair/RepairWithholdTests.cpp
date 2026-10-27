@@ -38,6 +38,12 @@ TEST_CASE("withhold: a delimiter with nothing after it waits") {
   CHECK(repair("**bold **") == "**bold**");
   CHECK(repair("`a` **") == "`a`");
   CHECK(repair("`co **") == "`co **`");
+  CHECK(repair("Press `*`") == "Press `*`");
+  CHECK(repair("use `=`") == "use `=`");
+  CHECK(repair("Op `||`") == "Op `||`");
+  CHECK(repair("| a |\n|---|\n| `|` |") == "| a |\n|---|\n| `|` |");
+  CHECK(repair("x =") == "x =");
+  CHECK(repair("Hello\xC2\xA0**") == "Hello");
   CHECK(repair("```\ncode\n```") == "```\ncode\n```");
   CHECK(repair("~~~\ncode\n~~~") == "~~~\ncode\n~~~");
   CHECK(repair("Hello **", RepairOptions()) == "Hello **");
@@ -48,6 +54,10 @@ TEST_CASE("withhold: a last line that is only a block marker") {
   CHECK(repair("Paragraph\n--") == "Paragraph\n");
   CHECK(repair("Paragraph\n=") == "Paragraph\n");
   CHECK(repair("Paragraph\n---") == "Paragraph\n---");
+  CHECK(repair("Intro\n\n***\n") == "Intro\n\n***\n");
+  CHECK(repair("Intro\n\n___\n") == "Intro\n\n___\n");
+  CHECK(repair("Intro\n\n* * *\n") == "Intro\n\n* * *\n");
+  CHECK(repair("Intro\n\n***") == "Intro\n\n");
   CHECK(repair("Intro\n\n#") == "Intro\n\n");
   CHECK(repair("Intro\n\n## ") == "Intro\n\n");
   CHECK(repair("Intro\n\n#hashtag") == "Intro\n\n#hashtag");
@@ -60,6 +70,8 @@ TEST_CASE("withhold: a last line that is only a block marker") {
   CHECK(repair("## **") == "");
   CHECK(repair("> quote\n>") == "> quote\n");
   CHECK(repair("> quote\n> ") == "> quote\n");
+  CHECK(repair("| a |\n|") == "| a |\n");
+  CHECK(repair("| a |\n| b |") == "| a |\n| b |");
   CHECK(repair("Price\n12") == "Price\n12");
   CHECK(repair("-foo") == "-foo");
   CHECK(repair("Paragraph\n-", RepairOptions()) == std::string("Paragraph\n-").append(RepairInternal::kZeroWidthSpace));
@@ -87,6 +99,8 @@ TEST_CASE("withhold: a closing fence still being typed") {
   CHECK(repair(open + "`") == open);
   CHECK(repair("> ```\n> code\n> ``") == "> ```\n> code\n");
   CHECK(repair("```\ncode **x") == "```\ncode **x");
+  CHECK(repair("````\ncode\n```") == "````\ncode\n");
+  CHECK(repair("````\ncode\n````") == "````\ncode\n````");
 }
 
 TEST_CASE("a marker line inside an open fence is code") {
@@ -108,6 +122,8 @@ TEST_CASE("withhold: unclosed math is cut at its opener") {
   const RepairOptions o = withholdingMath();
   CHECK(repair("The area is $\\pi r^", o) == "The area is");
   CHECK(repair("Closed $x^2$ and open $\\frac{1}", o) == "Closed $x^2$ and open");
+  CHECK(repair("$a $b", o) == "$a");
+  CHECK(repair("Prices in $USD or $EUR today", o) == "Prices in $USD or");
   CHECK(repair("Display $$\\sum_i", o) == "Display");
   CHECK(repair("$$\nx^2 +\n", o) == "");
   CHECK(repair("Intro\n\n$$\nx^2 +", o) == "Intro\n\n");
@@ -116,6 +132,9 @@ TEST_CASE("withhold: unclosed math is cut at its opener") {
         "Earlier $x in a finished paragraph\n\nNext **b**");
   CHECK(repair("| $x | y", o) == "| $x | y");
   CHECK(repair("| $x", o) == "");
+  CHECK(repair("# Cost in $USD\nSome text", o) == "# Cost in $USD\nSome text");
+  CHECK(repair("# Cost in $USD\n", o) == "# Cost in $USD\n");
+  CHECK(repair("See \xC2\xAB$x", o) == "See \xC2\xAB");
 }
 
 TEST_CASE("withhold: a dollar next to a digit or space is currency") {
@@ -138,6 +157,11 @@ TEST_CASE("withhold: the handlers read dollars the way the parser does") {
   CHECK(repair("`$HOME` and **b", o) == "`$HOME` and **b**");
   CHECK(repair("```\n$ npm i\n```\n**b", o) == "```\n$ npm i\n```\n**b**");
   CHECK(repair("Open $x stays open **b", o) == "Open");
+  CHECK(repair("$a $$b$$ _c", o) == "$a $$b$$ _c_");
+  RepairOptions parserOnly;
+  parserOnly.inlineMath = true;
+  parserOnly.withholdMath = true;
+  CHECK(repair("# Cost $USD\nsome _it", parserOnly) == "# Cost $USD\nsome _it_");
 }
 
 TEST_CASE("withhold: math follows the math options") {

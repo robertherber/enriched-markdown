@@ -56,6 +56,8 @@
 //   reference treats every `$` as math.
 // - A `-` or `=` line inside an open fence is not a setext underline.
 // - Closers are inserted before trailing whitespace, not only before newlines.
+// - A fence closes only with a run at least as long as its opener, so a ```
+//   line inside a ```` fence is content. The reference toggles on every ```.
 // The affected recorded cases in the test data are marked as ours.
 //
 // Additions with no reference counterpart: closers for spoilers, highlight,
