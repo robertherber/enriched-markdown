@@ -234,6 +234,8 @@ jobs:
     runs-on: macos-latest-xlarge
     env:
       TURBO_CACHE_DIR: .turbo/ios
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -283,6 +285,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cocoapods-
 
+      - name: Set up ccache
+        if: env.turbo_cache_hit != 1
+        uses: hendrikmuhs/ccache-action@ca3acd2731eef11f1572ccb126356c2f9298d35e # v1.2.9
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Install cocoapods
         if: env.turbo_cache_hit != 1
         run: |
@@ -290,6 +299,7 @@ jobs:
           pod install
         env:
           NO_FLIPPER: 1
+          USE_CCACHE: 1
 
       - name: Cache cocoapods
         if: env.turbo_cache_hit != 1 && steps.cocoapods-cache.outputs.cache-hit != 'true'
@@ -361,6 +371,8 @@ jobs:
     runs-on: macos-latest-xlarge
     env:
       TURBO_CACHE_DIR: .turbo/rn-ios-test
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -409,6 +421,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cocoapods-
 
+      - name: Set up ccache
+        if: env.turbo_cache_hit != 1
+        uses: hendrikmuhs/ccache-action@ca3acd2731eef11f1572ccb126356c2f9298d35e # v1.2.9
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Install cocoapods
         if: env.turbo_cache_hit != 1
         run: |
@@ -416,6 +435,7 @@ jobs:
           pod install
         env:
           NO_FLIPPER: 1
+          USE_CCACHE: 1
 
       - name: Cache cocoapods
         if: env.turbo_cache_hit != 1 && steps.cocoapods-cache.outputs.cache-hit != 'true'
