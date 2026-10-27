@@ -76,7 +76,7 @@ The full defaults table is under [`.markdownAccessibilityLabels`](/ios/api-refer
 </Tab>
 <Tab label="Android">
 
-Not localizable. The standalone Android SDK has no label API at any layer and ships no string resources: everything TalkBack hears from it - `"bullet point"`, `"list item {n}"`, `"task, checked"` / `"task, not checked"` and their `"nested"` variants, `"heading level {n}"`, `"Row {n}: {content}"`, `"Math: {latex}"`, `"Image"`, and the `"link"`, `"image"` and `"alert"` role descriptions - is hard-coded English. See the [roadmap](/misc/roadmap).
+Not localizable. The standalone Android SDK has no label API at any layer and ships no string resources: everything TalkBack hears from it - `"bullet point"`, `"list item {n}"`, `"task, checked"` / `"task, not checked"` and their `"nested"` variants, `"heading level {n}"`, `"Row {n}: {content}"`, `"Math: "` followed by the formula read in English, `"Image"`, and the `"link"`, `"image"` and `"alert"` role descriptions - is hard-coded English. See the [roadmap](/misc/roadmap).
 
 </Tab>
 </CodeTabs>

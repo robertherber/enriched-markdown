@@ -250,9 +250,9 @@ A half-arrived block - an opening `$$` whose formula is still empty - is not an 
 
 ## Accessibility {#accessibility}
 
-A math **block** is a single focusable element that TalkBack reads as `"Math: "` followed by the raw LaTeX source - `"Math: \frac{1}{3}"`, not a spoken rendering. The label is not configurable.
+TalkBack reads a formula as an English rendering of the source - "x squared over 2", "integral from 0 to 1 of …" - rather than spelling out LaTeX. A math **block** is a single focusable element labeled `"Math: "` followed by that rendering, and an **inline** formula becomes an element of its own inside its paragraph with the same label. A formula inside a link is read as part of the link text.
 
-An **inline** formula has no spoken form of its own: it is drawn over a single placeholder character in the text, which TalkBack does not read out. If a formula carries meaning a reader would miss, say it in the surrounding prose too.
+The conversion is the one the iOS and React Native packages use, from the shared C++ core: it covers fractions, roots, powers and indices, sums, products, integrals and limits with their bounds, matrices and cases, Greek letters, common relations and functions, decorations, and `\text`. A command it does not know is read by name. The label is English only and not configurable. `LatexSpeech.spokenForm(latex)` in the `parser` artifact exposes the same conversion to your own code.
 
 ## The engine {#engine}
 

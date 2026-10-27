@@ -44,6 +44,8 @@ class MathInlineSpan private constructor(
   /** Bare latex, matching what the display-math segment's plain copy puts on the clipboard. */
   override fun toPlainText(): String = latex
 
+  override fun toAccessibilityLabel(): String = mathAccessibilityLabel(latex)
+
   override fun getSize(
     paint: Paint,
     text: CharSequence?,

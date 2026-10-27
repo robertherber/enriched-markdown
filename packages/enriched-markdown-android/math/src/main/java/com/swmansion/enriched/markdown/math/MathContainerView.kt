@@ -113,7 +113,7 @@ class MathContainerView(
   }
 
   private fun updateAccessibilityLabel() {
-    contentDescription = "Math: $latex"
+    contentDescription = mathAccessibilityLabel(latex)
   }
 
   private fun showContextMenu(anchor: View): Boolean {
