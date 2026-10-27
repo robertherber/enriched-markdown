@@ -263,7 +263,7 @@ std::unordered_map<std::string, std::string> buildCommandWords() {
     words[letter] = spoken;
     std::string capital = letter;
     capital[0] = static_cast<char>(capital[0] - 'a' + 'A');
-    words[capital] = "capital " + spoken;
+    words[capital] = "cap " + spoken;
   }
   return words;
 }

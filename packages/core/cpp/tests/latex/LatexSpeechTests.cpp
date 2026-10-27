@@ -87,7 +87,7 @@ TEST_CASE("environments") {
 }
 
 TEST_CASE("symbols, letters and text") {
-  CHECK(speak("\\alpha^2 + \\Pi") == "alpha squared plus capital pi");
+  CHECK(speak("\\alpha^2 + \\Pi") == "alpha squared plus cap pi");
   CHECK(speak("\\varepsilon > 0") == "epsilon greater than 0");
   CHECK(speak("a \\neq b") == "a not equal to b");
   CHECK(speak("\\left( a + b \\right)^2") == "open paren a plus b close paren squared");
