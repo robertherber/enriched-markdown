@@ -253,7 +253,7 @@ class MarkdownAccessibilityHelper(
         span.imageAltText
           ?: span.spoken?.accessibilityLabel(labels)
           ?: pill?.accessibilityText
-          ?: spanned.substring(span.start, span.end).trim()
+          ?: spanned.spokenText(span.start, span.end, labels)
       if (content.isNotEmpty()) {
         items.add(createSpanItem(nextId++, content, span, spanned))
       }

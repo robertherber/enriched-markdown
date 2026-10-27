@@ -39,6 +39,7 @@ endif()
 file(GLOB ENRMRKD_SOURCES "${CPP_ROOT}/enrmrkd/*.c")
 file(GLOB PARSER_SOURCES "${CPP_ROOT}/parser/*.cpp")
 file(GLOB HIGHLIGHT_SOURCES "${CPP_ROOT}/highlight/*.cpp")
+file(GLOB LATEX_SOURCES "${CPP_ROOT}/latex/*.cpp")
 
 # The vendored parser is C code, build as separate static library with C flags
 add_library(enrmrkd_lib STATIC ${ENRMRKD_SOURCES})
@@ -59,6 +60,7 @@ add_library(
   ${LIB_CUSTOM_JNI_SRCS}
   ${PARSER_SOURCES}
   ${HIGHLIGHT_SOURCES}
+  ${LATEX_SOURCES}
   ${ANDROID_CPP_DIR}/jni-adapter.cpp
   ${COMMON_CPP_DIR}/EnrichedMarkdownParser.cpp
 )
@@ -75,6 +77,7 @@ target_include_directories(
   ${CPP_ROOT}/enrmrkd
   ${CPP_ROOT}/parser
   ${CPP_ROOT}/highlight
+  ${CPP_ROOT}/latex
 )
 
 target_compile_definitions(${LIB_TARGET_NAME} PRIVATE ENRMRKD_USE_UTF8=1)

@@ -165,7 +165,7 @@ Tables expose one focusable element per row (header included), labeled with the 
 
 ### Math
 
-Each formula exposes a focusable element labeled with the `math.equation` template. `{speech}` is an English reading of the LaTeX ("x squared over 2", "integral from 0 to 1 of …"): fractions, roots, powers and indices, big operators with bounds, Greek letters, relations, functions, decorations and `\text` are spoken as words, and a command the converter does not know is read by name; `{latex}` reads the source instead.
+Each formula exposes a focusable element labeled with the `math.equation` template. `{speech}` is an English reading of the LaTeX ("x squared over 2", "integral from 0 to 1 of …"): fractions, roots, powers and indices, big operators with bounds, matrices and cases, Greek letters, relations, functions, decorations and `\text` are spoken as words, and a command the converter does not know is read by name; `{latex}` reads the source instead.
 
 ## Text input (`EnrichedMarkdownTextInput`)
 

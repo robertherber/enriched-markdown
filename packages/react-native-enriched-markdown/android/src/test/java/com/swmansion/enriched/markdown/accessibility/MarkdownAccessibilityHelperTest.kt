@@ -66,6 +66,16 @@ class MarkdownAccessibilityHelperTest {
     assertEquals(listOf(true, false), (0 until 2).map { harness.node(it).isHeading })
   }
 
+  @Test
+  fun formulaInsideLinkTextIsSpokenInPlace() {
+    val text =
+      SpannableStringBuilder("see ")
+        .append("￼", FormulaSpan, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        .append(" here")
+    val labels = AccessibilityLabels(mathEquation = "Math: {speech}")
+    assertEquals("see Math: E equals m c squared here", text.spokenText(0, text.length, labels))
+  }
+
   private fun headingSpan(level: Int): HeadingSpan {
     val context = RuntimeEnvironment.getApplication()
     DisplayMetricsHolder.initDisplayMetricsIfNotInitialized(context)

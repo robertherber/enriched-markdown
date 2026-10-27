@@ -37,7 +37,7 @@ static const CGFloat kFocusRectPadding = 2.0;
     if (trimmed.length > 0) {
       NSArray *links = [self linksInRange:paragraphRange info:info];
       NSArray *images = [self imagesInRange:paragraphRange info:info];
-      NSArray *math = [self mathInRange:paragraphRange inTextStorage:textView.textStorage];
+      NSArray *math = [self mathInRange:paragraphRange info:info inTextStorage:textView.textStorage];
       NSArray *specials = [[links arrayByAddingObjectsFromArray:images] arrayByAddingObjectsFromArray:math];
 
       NSInteger level = [self headingLevelForRange:paragraphRange info:info];
@@ -123,7 +123,7 @@ static const CGFloat kFocusRectPadding = 2.0;
       type = ElementTypeText;
       label = [labels mathLabelForLatex:item[@"latex"]];
     } else {
-      label = [fullText substringWithRange:itemRange];
+      label = [self spokenTextInRange:itemRange textStorage:textView.textStorage labels:labels];
       id attachment = [textView.textStorage attribute:NSAttachmentAttributeName
                                               atIndex:itemRange.location
                                        effectiveRange:NULL];
@@ -298,17 +298,40 @@ static const CGFloat kFocusRectPadding = 2.0;
   return images;
 }
 
-+ (NSArray *)mathInRange:(NSRange)range inTextStorage:(NSTextStorage *)storage
++ (NSArray *)mathInRange:(NSRange)range info:(AccessibilityInfo *)info inTextStorage:(NSTextStorage *)storage
 {
   NSMutableArray *math = [NSMutableArray array];
   [storage enumerateAttribute:@"mathLatex"
                       inRange:range
                       options:0
                    usingBlock:^(NSString *latex, NSRange mathRange, BOOL *stop) {
-                     if (latex)
+                     if (latex && ![self range:mathRange isInsideAnyOf:info.linkRanges])
                        [math addObject:@{@"range" : [NSValue valueWithRange:mathRange], @"latex" : latex}];
                    }];
   return math;
+}
+
++ (BOOL)range:(NSRange)range isInsideAnyOf:(NSArray<NSValue *> *)ranges
+{
+  for (NSValue *value in ranges)
+    if (NSEqualRanges(NSIntersectionRange(range, value.rangeValue), range))
+      return YES;
+  return NO;
+}
+
++ (NSString *)spokenTextInRange:(NSRange)range
+                    textStorage:(NSTextStorage *)storage
+                         labels:(ENRMAccessibilityLabels *)labels
+{
+  NSMutableString *text = [NSMutableString string];
+  [storage enumerateAttribute:@"mathLatex"
+                      inRange:range
+                      options:0
+                   usingBlock:^(NSString *latex, NSRange runRange, BOOL *stop) {
+                     [text appendString:latex ? [labels mathLabelForLatex:latex]
+                                              : [storage.string substringWithRange:runRange]];
+                   }];
+  return text;
 }
 
 + (NSDictionary *)listItemInfoForRange:(NSRange)range info:(AccessibilityInfo *)info
