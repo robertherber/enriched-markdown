@@ -82,4 +82,4 @@ exception: it is mapped to `data-testid`.
 - Editor features — see [Web Editor](WEB_INPUT.md#not-supported-on-web) for what `EnrichedMarkdownTextInput` does not support on web.
 - Spoilers (`||text||`) — `EnrichedMarkdownText` does not render them on web yet, and the text inside a spoiler is currently left out.
 - Configurable link `target` — all links open in a new tab (`target="_blank"`). Use `onLinkPress` for custom navigation.
-- Link pills — `pill.lineHeight` is ignored, and plain copy copies the pill's visible label rather than the original link text.
+- Link pills — plain copy copies the pill's visible label rather than the original link text; a rich-text paste keeps the link to the original URL.

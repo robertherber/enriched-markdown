@@ -19,7 +19,11 @@ const markdownStyle: MarkdownStyle = {
     '^cite:': {
       underline: true,
       backgroundColor: '#EFF6FF',
-      pill: { label: 'source', iconUri: 'https://example.com/book.png' },
+      pill: {
+        label: 'source',
+        iconUri: 'https://example.com/book.png',
+        lineHeight: 40,
+      },
     },
   },
 };
@@ -76,6 +80,8 @@ function render(
   return container.querySelector('a')!;
 }
 
+const paragraph = () => container.querySelector('p')!;
+
 describe('web link pills', () => {
   it('shows the per-link label and reports the original URL', () => {
     const onLinkPress = jest.fn();
@@ -118,5 +124,38 @@ describe('web link pills', () => {
     expect(container.querySelector('img')).toBeNull();
 
     expect(iconFor('https://example.com/avatar.png')).not.toBeNull();
+  });
+
+  it('raises the line height only of a paragraph that holds a pill', () => {
+    render([text('see '), link('cite:d', [text('d')])]);
+    expect(paragraph().style.lineHeight).toBe('40px');
+
+    render([text('see '), link('https://example.com', [text('docs')])]);
+    expect(paragraph().style.lineHeight).not.toBe('40px');
+  });
+
+  it('skips a source that failed for 30 seconds', () => {
+    jest.useFakeTimers();
+    try {
+      const url = 'cite:e';
+      const iconUri = 'https://example.com/flaky.png';
+      const pill = () =>
+        render([link(url, [text('e')])], {
+          linkPillContent: { [url]: { iconUri } },
+        });
+
+      const icon = pill().querySelector('img')!;
+      act(() => {
+        icon.dispatchEvent(new Event('error'));
+      });
+      act(() => root.render(null));
+      expect(pill().querySelector('img')).toBeNull();
+
+      jest.advanceTimersByTime(30_000);
+      act(() => root.render(null));
+      expect(pill().querySelector('img')).not.toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

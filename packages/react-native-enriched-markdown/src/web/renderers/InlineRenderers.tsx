@@ -1,5 +1,5 @@
 import { useEffect, useState, type MouseEvent } from 'react';
-import type { ASTNode, RendererProps, RendererMap } from '../types';
+import type { RendererProps, RendererMap } from '../types';
 import { extractNodeText } from '../utils';
 import { KaTeXRenderer } from './KaTeXRenderer';
 import {
@@ -7,22 +7,8 @@ import {
   linkPillLabelStyle,
   linkPillStyle,
   linkStyleForUrl,
-  linkVariantForUrl,
 } from '../styles';
-
-// Same rule as native: links holding these stay ordinary links.
-const NON_PILL_CONTENT = new Set<ASTNode['type']>([
-  'Image',
-  'LatexMathInline',
-  'LineBreak',
-  'Spoiler',
-]);
-
-function canBePill(node: ASTNode): boolean {
-  return (node.children ?? []).every(
-    (child) => !NON_PILL_CONTENT.has(child.type) && canBePill(child)
-  );
-}
+import { iconFailedRecently, linkPillFor, markIconFailed } from '../linkPills';
 
 function TextRenderer({ node }: RendererProps) {
   return <>{node.content ?? ''}</>;
@@ -76,8 +62,9 @@ function CodeRenderer({ node, styles, renderChildren }: RendererProps) {
 
 /**
  * Like native, the icon keeps its slot while it loads and gives it up if the
- * source fails. A tint is a CSS mask, which cannot report failure, so the
- * source is probed with an Image. Keyed by `iconUri`, so a new source starts over.
+ * source fails, and a source that failed is skipped for 30 seconds. A tint is a
+ * CSS mask, which cannot report failure, so the source is probed with an Image.
+ * Keyed by `iconUri`, so a new source starts over.
  */
 function LinkPillIcon({
   iconUri,
@@ -86,20 +73,26 @@ function LinkPillIcon({
   iconUri: string;
   tintColor: string | undefined;
 }) {
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState(() => iconFailedRecently(iconUri));
+  const fail = () => {
+    markIconFailed(iconUri);
+    setFailed(true);
+  };
 
   useEffect(() => {
-    if (!tintColor) return undefined;
+    if (!tintColor || failed) return undefined;
     let active = true;
     const probe = new Image();
     probe.onerror = () => {
-      if (active) setFailed(true);
+      if (!active) return;
+      markIconFailed(iconUri);
+      setFailed(true);
     };
     probe.src = iconUri;
     return () => {
       active = false;
     };
-  }, [iconUri, tintColor]);
+  }, [iconUri, tintColor, failed]);
 
   if (failed) return null;
   if (tintColor) {
@@ -110,7 +103,7 @@ function LinkPillIcon({
       alt=""
       src={iconUri}
       style={linkPillIconStyle(iconUri, undefined)}
-      onError={() => setFailed(true)}
+      onError={fail}
     />
   );
 }
@@ -140,8 +133,8 @@ function LinkRenderer({
     }
   };
 
-  const variant = linkVariantForUrl(style, url);
-  if (variant?.pill.enabled && canBePill(node)) {
+  const variant = linkPillFor(style, node);
+  if (variant) {
     const { pill } = variant;
     const content = capabilities.linkPillContent?.[url];
     const originalText = extractNodeText(node);

@@ -167,7 +167,7 @@ Icons are drawn at the label's font size.
 
 Local files show on the first layout. Remote icons load in the background through the same pipeline as Markdown images, using `imageRequestHeaders`, and the pill keeps room for them while they load. A source that fails to load gives that room back, so the pill shrinks to its label, and is retried after 30 seconds.
 
-On web, a pill is an inline-flex `<a>` with the same label, icon, colors and geometry. `pill.lineHeight` is ignored there (an inline-flex box already grows its line), and plain copy copies the visible label. macOS renders ordinary links and ignores `pill` and `linkPillContent`.
+On web, a pill is an inline-flex `<a>` with the same label, icon, colors, geometry and line height. Copy follows the browser: plain text gets the visible label, and a rich-text paste keeps the link to the original URL. macOS renders ordinary links and ignores `pill` and `linkPillContent`.
 
 ## Positioning the Suggestion List
 
