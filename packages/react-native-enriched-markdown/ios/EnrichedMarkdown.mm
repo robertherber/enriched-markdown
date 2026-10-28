@@ -2028,8 +2028,9 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownCls(void)
 #if !TARGET_OS_OSX
 - (NSArray<UIAccessibilityCustomRotor *> *)accessibilityCustomRotors
 {
-  return [MarkdownAccessibilityElementBuilder buildRotorsFromElements:[self accessibilityElements]
-                                                               labels:_accessibilityLabels];
+  // The rotors filter by trait, which only the leaves inside the segments carry.
+  NSArray *leaves = [MarkdownAccessibilityElementBuilder collectLeafElementsFromElements:[self accessibilityElements]];
+  return [MarkdownAccessibilityElementBuilder buildRotorsFromElements:leaves labels:_accessibilityLabels];
 }
 #endif
 

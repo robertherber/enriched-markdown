@@ -361,6 +361,32 @@ static const CGFloat kFocusRectPadding = 2.0;
   return [self createRotorWithName:name elements:elements];
 }
 
++ (void)collectLeafElementsFrom:(NSArray *)elements into:(NSMutableArray *)leaves
+{
+  for (id element in elements) {
+    if ([element isKindOfClass:[UIView class]] &&
+        (((UIView *)element).hidden || [element accessibilityElementsHidden])) {
+      continue;
+    }
+    if ([element isAccessibilityElement]) {
+      [leaves addObject:element];
+      continue;
+    }
+    NSArray *children = [element accessibilityElements];
+    if (children == nil && [element isKindOfClass:[UIView class]]) {
+      children = ((UIView *)element).subviews;
+    }
+    [self collectLeafElementsFrom:children into:leaves];
+  }
+}
+
++ (NSArray *)collectLeafElementsFromElements:(NSArray *)elements
+{
+  NSMutableArray *leaves = [NSMutableArray array];
+  [self collectLeafElementsFrom:elements into:leaves];
+  return leaves;
+}
+
 + (NSArray<UIAccessibilityCustomRotor *> *)buildRotorsFromElements:(NSArray<UIAccessibilityElement *> *)elements
                                                             labels:(ENRMAccessibilityLabels *)labels
 {
