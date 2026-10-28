@@ -1,8 +1,28 @@
 import type { MouseEvent } from 'react';
-import type { RendererProps, RendererMap } from '../types';
+import type { ASTNode, RendererProps, RendererMap } from '../types';
 import { extractNodeText } from '../utils';
 import { KaTeXRenderer } from './KaTeXRenderer';
-import { linkStyleForUrl } from '../styles';
+import {
+  linkPillIconStyle,
+  linkPillLabelStyle,
+  linkPillStyle,
+  linkStyleForUrl,
+  linkVariantForUrl,
+} from '../styles';
+
+// Same rule as native: links holding these stay ordinary links.
+const NON_PILL_CONTENT = new Set<ASTNode['type']>([
+  'Image',
+  'LatexMathInline',
+  'LineBreak',
+  'Spoiler',
+]);
+
+function canBePill(node: ASTNode): boolean {
+  return (node.children ?? []).every(
+    (child) => !NON_PILL_CONTENT.has(child.type) && canBePill(child)
+  );
+}
 
 function TextRenderer({ node }: RendererProps) {
   return <>{node.content ?? ''}</>;
@@ -58,6 +78,7 @@ function LinkRenderer({
   node,
   style,
   callbacks,
+  capabilities,
   renderChildren,
 }: RendererProps) {
   const url = node.attributes?.url;
@@ -77,6 +98,55 @@ function LinkRenderer({
       callbacks.onLinkLongPress({ url });
     }
   };
+
+  const variant = linkVariantForUrl(style, url);
+  if (variant?.pill.enabled && canBePill(node)) {
+    const { pill } = variant;
+    const content = capabilities.linkPillContent?.[url];
+    const originalText = extractNodeText(node);
+    const label = content?.label || pill.label || undefined;
+    const iconUri = content?.iconUri || pill.iconUri;
+    // A per-link icon keeps its colors unless its own entry tints it.
+    const iconTintColor =
+      content?.iconTintColor ??
+      (content?.iconUri ? undefined : pill.iconTintColor);
+    const accessibleName =
+      label && label !== originalText ? `${label}, ${originalText}` : undefined;
+
+    return (
+      <a
+        href={url}
+        style={{
+          ...linkStyleForUrl(style, url),
+          ...linkPillStyle(pill, variant.backgroundColor),
+        }}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={accessibleName}
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
+      >
+        {iconUri ? (
+          iconTintColor ? (
+            <span
+              aria-hidden
+              style={linkPillIconStyle(iconUri, String(iconTintColor))}
+            />
+          ) : (
+            <img
+              alt=""
+              src={iconUri}
+              style={linkPillIconStyle(iconUri, undefined)}
+              onError={(event) => {
+                event.currentTarget.style.display = 'none';
+              }}
+            />
+          )
+        ) : null}
+        <span style={linkPillLabelStyle}>{label ?? renderChildren(node)}</span>
+      </a>
+    );
+  }
 
   return (
     <a
