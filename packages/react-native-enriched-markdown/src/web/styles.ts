@@ -367,6 +367,11 @@ export function linkStyleForUrl(
 /**
  * A pill is one inline box that never breaks across lines, like native. The
  * label truncates at the tail when `maxWidth` (or the line) is too narrow.
+ *
+ * Like native, the label sits on the text baseline and the box is the font's
+ * height plus padding and border, whatever the paragraph's `lineHeight`. Only
+ * the label takes part in baseline alignment (the icon is centered), so the
+ * flex container's baseline is the label's.
  */
 export function linkPillStyle(
   pill: LinkPillInternal,
@@ -374,13 +379,13 @@ export function linkPillStyle(
 ): CSSProperties {
   return {
     display: 'inline-flex',
-    alignItems: 'center',
+    alignItems: 'baseline',
     gap: '0.25em',
     maxWidth: pill.maxWidth > 0 ? pill.maxWidth : '100%',
     boxSizing: 'border-box',
-    verticalAlign: 'bottom',
+    verticalAlign: 'baseline',
+    lineHeight: 'normal',
     whiteSpace: 'nowrap',
-    textDecoration: 'none',
     paddingInline: pill.paddingHorizontal,
     paddingBlock: pill.paddingVertical,
     borderRadius: pill.borderRadius,
@@ -405,7 +410,12 @@ export function linkPillIconStyle(
   iconUri: string,
   tintColor: string | undefined
 ): CSSProperties {
-  const size: CSSProperties = { width: '1em', height: '1em', flexShrink: 0 };
+  const size: CSSProperties = {
+    width: '1em',
+    height: '1em',
+    flexShrink: 0,
+    alignSelf: 'center',
+  };
   if (!tintColor) return { ...size, objectFit: 'contain' };
   const mask = `url("${iconUri.replace(/"/g, '%22')}") center / contain no-repeat`;
   return {

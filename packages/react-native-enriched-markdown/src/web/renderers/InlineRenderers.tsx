@@ -1,4 +1,4 @@
-import type { MouseEvent } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import type { ASTNode, RendererProps, RendererMap } from '../types';
 import { extractNodeText } from '../utils';
 import { KaTeXRenderer } from './KaTeXRenderer';
@@ -74,6 +74,47 @@ function CodeRenderer({ node, styles, renderChildren }: RendererProps) {
   );
 }
 
+/**
+ * Like native, the icon keeps its slot while it loads and gives it up if the
+ * source fails. A tint is a CSS mask, which cannot report failure, so the
+ * source is probed with an Image. Keyed by `iconUri`, so a new source starts over.
+ */
+function LinkPillIcon({
+  iconUri,
+  tintColor,
+}: {
+  iconUri: string;
+  tintColor: string | undefined;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!tintColor) return undefined;
+    let active = true;
+    const probe = new Image();
+    probe.onerror = () => {
+      if (active) setFailed(true);
+    };
+    probe.src = iconUri;
+    return () => {
+      active = false;
+    };
+  }, [iconUri, tintColor]);
+
+  if (failed) return null;
+  if (tintColor) {
+    return <span aria-hidden style={linkPillIconStyle(iconUri, tintColor)} />;
+  }
+  return (
+    <img
+      alt=""
+      src={iconUri}
+      style={linkPillIconStyle(iconUri, undefined)}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function LinkRenderer({
   node,
   style,
@@ -127,21 +168,11 @@ function LinkRenderer({
         onContextMenu={handleContextMenu}
       >
         {iconUri ? (
-          iconTintColor ? (
-            <span
-              aria-hidden
-              style={linkPillIconStyle(iconUri, String(iconTintColor))}
-            />
-          ) : (
-            <img
-              alt=""
-              src={iconUri}
-              style={linkPillIconStyle(iconUri, undefined)}
-              onError={(event) => {
-                event.currentTarget.style.display = 'none';
-              }}
-            />
-          )
+          <LinkPillIcon
+            key={iconUri}
+            iconUri={iconUri}
+            tintColor={iconTintColor ? String(iconTintColor) : undefined}
+          />
         ) : null}
         <span style={linkPillLabelStyle}>{label ?? renderChildren(node)}</span>
       </a>
