@@ -21,23 +21,16 @@ const avatar = (initials: string, color: string) =>
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="${color}"/><text x="12" y="16" font-family="sans-serif" font-size="11" font-weight="700" fill="white" text-anchor="middle">${initials}</text></svg>`
   )}`;
 
+// The labels are the link text itself, so this markdown reads the same where
+// pills are not supported (plain colored links).
 const citationMarkdown = `
-The Eiffel Tower was built for the 1889 World's Fair [cite](cite:https://en.wikipedia.org/wiki/Eiffel_Tower) and stood as the tallest man-made structure in the world until 1930 [cite](cite:https://www.toureiffel.paris/en/the-monument/history). Its iron lattice is repainted roughly every seven years [cite](cite:https://www.toureiffel.paris/en/the-monument/key-figures-and-anecdotes-about-the-eiffel-tower-painting).
+The Eiffel Tower was built for the 1889 World's Fair [Wikipedia](cite:https://en.wikipedia.org/wiki/Eiffel_Tower) and stood as the tallest man-made structure in the world until 1930 [toureiffel.paris](cite:https://www.toureiffel.paris/en/the-monument/history). Its iron lattice is repainted roughly every seven years [toureiffel.paris — Key figures about painting the tower](cite:https://www.toureiffel.paris/en/the-monument/key-figures-and-anecdotes-about-the-eiffel-tower-painting).
 
 | Fact | Source |
 | --- | --- |
-| Opened in 1889 | [cite](cite:https://en.wikipedia.org/wiki/Eiffel_Tower) |
-| Height: 330 m | [cite](cite:https://www.toureiffel.paris/en/the-monument/history) |
+| Opened in 1889 | [Wikipedia](cite:https://en.wikipedia.org/wiki/Eiffel_Tower) |
+| Height: 330 m | [toureiffel.paris](cite:https://www.toureiffel.paris/en/the-monument/history) |
 `.trim();
-
-const citationLabels = {
-  'cite:https://en.wikipedia.org/wiki/Eiffel_Tower': { label: 'Wikipedia' },
-  'cite:https://www.toureiffel.paris/en/the-monument/history': {
-    label: 'toureiffel.paris',
-  },
-  'cite:https://www.toureiffel.paris/en/the-monument/key-figures-and-anecdotes-about-the-eiffel-tower-painting':
-    { label: 'toureiffel.paris — Key figures about painting the tower' },
-};
 
 const mentionMarkdown = `
 Open [src/components/Button.tsx](https://example.com/files/src/components/Button.tsx) and ask [@gregory](user:gregory) or [@ana](user:ana) to review. Plain links like [the docs](https://example.com/docs) stay ordinary links.
@@ -116,14 +109,11 @@ export function LinkPillsExample({
 }) {
   return (
     <View style={styles.column}>
-      <Text style={styles.caption}>
-        Citations (linkVariants + linkPillContent)
-      </Text>
+      <Text style={styles.caption}>Citations (linkVariants only)</Text>
       <View style={styles.card} testID="pills-citations-light">
         <EnrichedMarkdownText
           markdown={citationMarkdown}
           markdownStyle={citationStyle(false)}
-          linkPillContent={citationLabels}
           onLinkPress={onLinkPress}
         />
       </View>
@@ -136,7 +126,6 @@ export function LinkPillsExample({
         <EnrichedMarkdownText
           markdown={citationMarkdown}
           markdownStyle={citationStyle(true)}
-          linkPillContent={citationLabels}
           onLinkPress={onLinkPress}
         />
       </View>
